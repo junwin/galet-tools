@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "galet-tools"
+version = "0.1.0"
+description = "Self-contained generic tool handlers and handler framework extracted from the Lucy monorepo"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "junwin", email = "jdunwin@gmail.com" }]
+keywords = ["tools", "handlers", "files", "svg", "image-generation"]
+dependencies = ["Pillow", "pydantic>=2"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp==2.1.1"]
+
+[project.scripts]
+galet-tools-mcp = "galet_tools.mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -1,0 +1,24 @@
+{
+  "account": "junwin",
+  "allowlist": [
+    "file_load",
+    "file_save",
+    "execute_command",
+    "generate_svg",
+    "generate_image"
+  ],
+  "storage_root": "/home/junwin/lucy_storage",
+  "storage_namespace": "galet",
+  "external_roots": {
+    "repo_lucy": "/home/junwin/src/repos/lucy",
+    "repos": "/home/junwin/src/repos",
+    "obsidian": "/home/junwin/Documents/mynotes",
+    "pi_share": "/home/junwin/pishare"
+  },
+  "sandbox_root": "/home/junwin/sandbox",
+  "host": "127.0.0.1",
+  "port": 8765,
+  "fonts": [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+  ]
+}
