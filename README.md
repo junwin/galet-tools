@@ -85,6 +85,32 @@ Optional keys left out or set to null fall back to their defaults:
 `tools/list` and `tools/call` over streamable HTTP at
 `http://127.0.0.1:8765/mcp`.
 
+### Smoke-test from the CLI
+
+`galet-tools-smoke` is the end-to-end CLI client: it connects over HTTP
+(streamable HTTP) to a running galet MCP server using the official MCP SDK
+and performs real `tools/list` and `tools/call` round trips.
+
+```bash
+galet-tools-smoke list
+galet-tools-smoke list --json
+galet-tools-smoke call <tool> '<json args>'
+```
+
+The default URL is `http://127.0.0.1:8765/mcp`; override it with `--url`.
+The default read timeout is 30s; override it with `--timeout`.
+
+Example round trip (storage root from `galet-mcp.json`):
+
+```bash
+galet-tools-smoke call file_save '{"path":"smoke/hello.txt","file_content":"hello galet smoke"}'
+galet-tools-smoke call file_load '{"path":"smoke/hello.txt"}'
+galet-tools-smoke call execute_command '{"command":"pwd","working_directory":"."}'
+```
+
+Exit codes: `0` ok; `1` tool reported an error (`isError`); `2` usage or
+bad JSON; `3` could not reach the server.
+
 ### Fail-closed behaviour
 
 The server refuses to start when the allowlist is empty or has no overlap

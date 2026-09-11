@@ -26,6 +26,7 @@ mcp = ["mcp==2.1.1"]
 
 [project.scripts]
 galet-tools-mcp = "galet_tools.mcp.server:main"
+galet-tools-smoke = "galet_tools.mcp.smoke:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
