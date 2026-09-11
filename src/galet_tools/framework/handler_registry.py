@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from galet_tools.framework.handler_v2 import HandlerV2
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)\n\nHandlerFactory = Callable[[Any], HandlerV2]
 
 
 def _context_tool_list(context_state: Any) -> Optional[List[str]]:
@@ -135,7 +135,7 @@ class HandlerRegistry:
             raise KeyError(
                 f"Unknown handler: {name!r}. Valid handlers: {self.tool_names()}"
             )
-        return cls(config)  # type: ignore[call-arg]
+        factory = self._factories.get(name)\n        if factory is not None:\n            return factory(config)\n        return cls(config)  # type: ignore[call-arg]
 
     def tools(self) -> List[Dict[str, Any]]:
         return [cls.tool_def() for cls in self._by_name.values()]
