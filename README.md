@@ -16,14 +16,6 @@ depend on narrow port interfaces owned by this package (`ConfigProvider`,
 never on Lucy's `ConfigManager`. Lucy implements those ports at its
 composition root.
 
-## Status
-
-Scaffold only (Phase A step 1 of the plan): `pyproject.toml`, the
-`galet_tools` package skeleton, and an empty `tests/` directory. Ports,
-framework, and the five generic tools (`file_load`, `file_save`,
-`execute_command`, `generate_svg`, `generate_image`) land in the following
-steps.
-
 ## Features
 
 - **Handler framework** — `HandlerV2` ABC, `HandlerRegistry`, schema
@@ -32,6 +24,8 @@ steps.
   `generate_svg`, `generate_image`, registered under their existing names.
 - **Ports** — sibling-owned interfaces the host implements, keeping the tools
   free of any host dependency.
+- **Handler discovery** — installed packages can contribute handlers through
+  Python package entry points without changing Lucy or galet-tools.
 
 ## Quick start
 
@@ -45,6 +39,49 @@ Run the suite:
 ```bash
 python -m pytest -q
 ```
+
+## Using the registry in a host
+
+Galet owns the handler contract and base registry. A host such as Lucy composes
+the generic handlers, its own host-specific handlers, and installed extension
+packages:
+
+```python
+from galet_tools import HandlerRegistry, register_installed_handlers
+from galet_tools.register_generic_defaults import register_generic_defaults
+
+registry = HandlerRegistry()
+register_generic_defaults(registry)
+register_lucy_handlers(registry)
+register_installed_handlers(registry)
+```
+
+Discovery adds installed capabilities to the registry; it does not grant them
+to an agent. The host should continue to apply its agent and context allowlists
+when selecting tool definitions.
+
+### Creating a handler extension
+
+An extension package declares a registrar in its `pyproject.toml`:
+
+```toml
+[project.entry-points."galet_tools.handlers"]
+web = "galet_web_tools:register"
+```
+
+The target is a callable that receives the shared registry:
+
+```python
+def register(registry):
+    registry.register(SearchHandler)
+    registry.register(FetchHandler)
+```
+
+Entry points are loaded in deterministic name order. A plugin that cannot be
+loaded, does not resolve to a callable, or fails during registration raises
+`HandlerPluginError` with the responsible entry-point name. This is
+intentionally fail-fast so a host cannot start with an unexpectedly incomplete
+tool set.
 
 ## MCP server
 
@@ -68,8 +105,8 @@ default; point it elsewhere with `--config <path>`.
 ### Configuration
 
 `galet-mcp.json` mirrors `galet-mcp.example.json`. Required keys are
-`account`, `storage_root`, `storage_namespace`, and `sandbox_root`; a null,
-blank, or (for the two path keys) relative value fails validation.
+`account`, `storage_root`, `storage_namespace`, and `sandbox_root`; a
+null, blank, or (for the two path keys) relative value fails validation.
 Optional keys left out or set to null fall back to their defaults:
 
 - `allowlist` — tools to expose; default is all five (`file_load`,
