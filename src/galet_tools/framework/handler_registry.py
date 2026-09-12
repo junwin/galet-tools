@@ -106,10 +106,16 @@ def filter_eligible_tool_defs(
 class HandlerRegistry:
     def __init__(self) -> None:
         self._by_name: Dict[str, Type[HandlerV2]] = {}
+        self._factories: Dict[str, HandlerFactory] = {}
         self._result_schemas: Dict[str, Dict[str, Any]] = {}
 
-    def register(self, handler_cls: Type[HandlerV2]) -> None:
-        """Register a handler class, caching its result schema when available."""
+    def register(
+        self,
+        handler_cls: Type[HandlerV2],
+        *,
+        factory: Optional[HandlerFactory] = None,
+    ) -> None:
+        """Register a handler class and optional host-provided factory."""
         name = handler_cls.name()
         if not name:
             raise ValueError("HandlerV2.name() must be non-empty")
@@ -117,6 +123,8 @@ class HandlerRegistry:
             raise ValueError(f"Duplicate handler name registered: {name}")
 
         self._by_name[name] = handler_cls
+        if factory is not None:
+            self._factories[name] = factory
 
         try:
             sch = handler_cls.result_schema()
