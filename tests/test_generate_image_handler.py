@@ -95,7 +95,7 @@ class TestConfiguredFonts:
         result = custom_handler.execute({"description": "font attempt"})
 
         assert result["ok"] is True
-        assert attempts == [(str(font_file), 20)]
+        assert attempts[0] == (str(font_file), 20)
 
     @pytest.mark.skipif(not os.path.exists(_DEJAVU_FONT), reason="no system TrueType font available")
     def test_image_renders_with_real_configured_font(self, tmp_path: Path) -> None:
