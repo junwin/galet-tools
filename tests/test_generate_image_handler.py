@@ -6,6 +6,7 @@ import base64
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import ImageFont
@@ -81,15 +82,15 @@ class TestConfiguredFonts:
         assert result["image"]["url"].startswith("data:image/png;base64,")
 
     def test_configured_font_path_is_attempted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        attempts: list[tuple[str, int]] = []
+        attempts: list[tuple[Any, int]] = []
         real_truetype = ImageFont.truetype
+        font_file = tmp_path / "custom.ttf"
 
-        def spy(font: str, size: int) -> object:
+        def spy(font: Any, size: int, *args: Any, **kwargs: Any) -> object:
             attempts.append((font, size))
-            return real_truetype(font, size=size)
+            return real_truetype(font, size=size, *args, **kwargs)
 
         monkeypatch.setattr(image_handler_module.ImageFont, "truetype", spy)
-        font_file = tmp_path / "custom.ttf"
         custom_handler = GenerateImageHandler(FakeConfigProvider([str(font_file)]))
 
         result = custom_handler.execute({"description": "font attempt"})
