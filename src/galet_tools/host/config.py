@@ -18,6 +18,7 @@ _ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 REGISTERED_TOOL_NAMES = (
     "file_load",
     "file_save",
+    "patch_apply",
     "execute_command",
     "generate_svg",
     "generate_image",
