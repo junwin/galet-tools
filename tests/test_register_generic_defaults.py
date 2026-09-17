@@ -8,11 +8,25 @@ from galet_tools.framework.handler_registry import HandlerRegistry
 from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
 
-EXPECTED_NAMES = ["execute_command", "file_load", "file_save", "generate_image", "generate_svg"]
+EXPECTED_NAMES = ["execute_command", "file_load", "file_save", "generate_image", "generate_svg", "patch_apply"]
 
 PROPERTY_KEYS = {
-    "file_load": {"location", "external_root", "path"},
+    "file_load": {
+        "location",
+        "external_root",
+        "path",
+        "start_line",
+        "line_count",
+        "include_line_numbers",
+    },
     "file_save": {"location", "external_root", "path", "file_content", "overwrite"},
+    "patch_apply": {
+        "location",
+        "external_root",
+        "path",
+        "patch_content",
+        "check_only",
+    },
     "execute_command": {
         "location",
         "external_root",
@@ -34,9 +48,9 @@ def _registry() -> HandlerRegistry:
 
 
 class TestRegistryBuild:
-    """register_generic_defaults registers the five generic tools."""
+    """register_generic_defaults registers the six generic tools."""
 
-    def test_registers_exactly_the_five_generic_tools(self) -> None:
+    def test_registers_exactly_the_six_generic_tools(self) -> None:
         reg = _registry()
         assert reg.tool_names() == sorted(EXPECTED_NAMES)
         for name in EXPECTED_NAMES:

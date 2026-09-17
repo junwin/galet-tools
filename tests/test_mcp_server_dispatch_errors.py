@@ -7,6 +7,7 @@ from tests.mcp_stubs import BoomHandler, RecordingHandler, StringResultHandler
 ALL_REGISTERED = [
     "file_load",
     "file_save",
+    "patch_apply",
     "execute_command",
     "generate_svg",
     "generate_image",
