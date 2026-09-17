@@ -20,8 +20,9 @@ composition root.
 
 - **Handler framework** — `HandlerV2` ABC, `HandlerRegistry`, schema
   handling, and permission filtering.
-- **Generic tools** — `file_load`, `file_save`, `execute_command`,
-  `generate_svg`, `generate_image`, registered under their existing names.
+- **Generic tools** — `file_load`, `file_save`, `patch_apply`,
+  `execute_command`, `generate_svg`, and `generate_image`, registered
+  under their existing names. `file_load` supports bounded line-range reads.
 - **Ports** — sibling-owned interfaces the host implements, keeping the tools
   free of any host dependency.
 - **Handler discovery** — installed packages can contribute handlers through
@@ -85,7 +86,7 @@ tool set.
 
 ## MCP server
 
-An optional MCP (Model Context Protocol) server exposes the five generic
+An optional MCP (Model Context Protocol) server exposes the six generic
 tools over streamable HTTP. Install the extra:
 
 ```bash
@@ -109,8 +110,9 @@ default; point it elsewhere with `--config <path>`.
 null, blank, or (for the two path keys) relative value fails validation.
 Optional keys left out or set to null fall back to their defaults:
 
-- `allowlist` — tools to expose; default is all five (`file_load`,
-  `file_save`, `execute_command`, `generate_svg`, `generate_image`).
+- `allowlist` — tools to expose; default is all six (`file_load`,
+  `file_save`, `patch_apply`, `execute_command`, `generate_svg`,
+  `generate_image`).
 - `external_roots` — named external roots the tools may access; default
   none.
 - `host` — default `127.0.0.1`; loopback only.
