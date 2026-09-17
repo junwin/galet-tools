@@ -118,3 +118,155 @@ class TestPathValidation:
 
         assert res["ok"] is False
         assert "external root not found" in res["error"]
+
+
+class TestRangedReads:
+    """Targeted reads preserve exact text and report useful paging metadata."""
+
+    def test_reads_requested_line_range(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        _write(
+            resolver.storage_base_dir(),
+            "sample.txt",
+            "one\ntwo\nthree\nfour\nfive\n",
+        )
+
+        res = handler.execute(
+            {
+                "location": "storage",
+                "external_root": "",
+                "path": "sample.txt",
+                "start_line": 2,
+                "line_count": 2,
+                "include_line_numbers": False,
+            }
+        )
+
+        assert res["ok"] is True
+        assert res["result"] == "two\nthree\n"
+        assert res["start_line"] == 2
+        assert res["end_line"] == 3
+        assert res["total_lines"] == 5
+        assert res["has_more"] is True
+
+    def test_line_numbers_are_optional(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        _write(resolver.storage_base_dir(), "sample.txt", "one\ntwo\nthree")
+
+        res = handler.execute(
+            {
+                "location": "storage",
+                "external_root": "",
+                "path": "sample.txt",
+                "start_line": 2,
+                "line_count": None,
+                "include_line_numbers": True,
+            }
+        )
+
+        assert res["ok"] is True
+        assert res["result"] == "2: two\n3: three"
+        assert res["end_line"] == 3
+        assert res["has_more"] is False
+
+    def test_null_range_preserves_whole_file_behavior(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        content = "one\n\nthree\n"
+        _write(resolver.storage_base_dir(), "sample.txt", content)
+
+        res = handler.execute(
+            {
+                "location": "storage",
+                "external_root": "",
+                "path": "sample.txt",
+                "start_line": None,
+                "line_count": None,
+                "include_line_numbers": False,
+            }
+        )
+
+        assert res["ok"] is True
+        assert res["result"] == content
+        assert res["start_line"] == 1
+        assert res["end_line"] == 3
+        assert res["total_lines"] == 3
+        assert res["has_more"] is False
+
+    def test_start_line_at_end_returns_empty_page(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        _write(resolver.storage_base_dir(), "sample.txt", "one\ntwo\n")
+
+        res = handler.execute(
+            {
+                "location": "storage",
+                "external_root": "",
+                "path": "sample.txt",
+                "start_line": 3,
+                "line_count": 10,
+                "include_line_numbers": False,
+            }
+        )
+
+        assert res["ok"] is True
+        assert res["result"] == ""
+        assert res["end_line"] == 2
+        assert res["total_lines"] == 2
+        assert res["has_more"] is False
+
+    @staticmethod
+    def _range_args(**overrides):
+        args = {
+            "location": "storage",
+            "external_root": "",
+            "path": "sample.txt",
+            "start_line": 1,
+            "line_count": 10,
+            "include_line_numbers": False,
+        }
+        args.update(overrides)
+        return args
+
+    def test_invalid_range_values_are_rejected(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        _write(resolver.storage_base_dir(), "sample.txt", "one\n")
+
+        for overrides in (
+            {"start_line": 0},
+            {"start_line": True},
+            {"line_count": 0},
+            {"line_count": 2001},
+            {"line_count": True},
+            {"include_line_numbers": "yes"},
+        ):
+            res = handler.execute(self._range_args(**overrides))
+            assert res["ok"] is False
+
+    def test_start_beyond_end_is_rejected(self, tmp_path: Path) -> None:
+        handler, resolver = _make(tmp_path)
+        _write(resolver.storage_base_dir(), "sample.txt", "one\n")
+
+        res = handler.execute(self._range_args(start_line=3))
+
+        assert res["ok"] is False
+        assert "exceeds file length" in res["error"]
+
+    def test_execute_raw_supplies_legacy_range_defaults(self, tmp_path: Path) -> None:
+        import json
+
+        handler, resolver = _make(tmp_path)
+        _write(resolver.storage_base_dir(), "sample.txt", "one\ntwo\n")
+
+        res = json.loads(
+            handler.execute_raw(
+                '{"location":"storage","external_root":"","path":"sample.txt"}'
+            )
+        )
+
+        assert res["ok"] is True
+        assert res["result"] == "one\ntwo\n"
+
+    def test_strict_schema_requires_all_properties(self) -> None:
+        parameters = FileLoadHandler2.tool_def()["parameters"]
+
+        assert set(parameters["required"]) == set(parameters["properties"])
+        assert parameters["additionalProperties"] is False
