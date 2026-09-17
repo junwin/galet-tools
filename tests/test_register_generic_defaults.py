@@ -11,8 +11,22 @@ from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler
 EXPECTED_NAMES = ["execute_command", "file_load", "file_save", "generate_image", "generate_svg", "patch_apply"]
 
 PROPERTY_KEYS = {
-    "file_load": {\n        "location",\n        "external_root",\n        "path",\n        "start_line",\n        "line_count",\n        "include_line_numbers",\n    },
-    "file_save": {"location", "external_root", "path", "file_content", "overwrite"},\n    "patch_apply": {\n        "location",\n        "external_root",\n        "path",\n        "patch_content",\n        "check_only",\n    },
+    "file_load": {
+        "location",
+        "external_root",
+        "path",
+        "start_line",
+        "line_count",
+        "include_line_numbers",
+    },
+    "file_save": {"location", "external_root", "path", "file_content", "overwrite"},
+    "patch_apply": {
+        "location",
+        "external_root",
+        "path",
+        "patch_content",
+        "check_only",
+    },
     "execute_command": {
         "location",
         "external_root",
