@@ -8,11 +8,11 @@ from galet_tools.framework.handler_registry import HandlerRegistry
 from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
 
-EXPECTED_NAMES = ["execute_command", "file_load", "file_save", "generate_image", "generate_svg"]
+EXPECTED_NAMES = ["execute_command", "file_load", "file_save", "generate_image", "generate_svg", "patch_apply"]
 
 PROPERTY_KEYS = {
-    "file_load": {"location", "external_root", "path"},
-    "file_save": {"location", "external_root", "path", "file_content", "overwrite"},
+    "file_load": {\n        "location",\n        "external_root",\n        "path",\n        "start_line",\n        "line_count",\n        "include_line_numbers",\n    },
+    "file_save": {"location", "external_root", "path", "file_content", "overwrite"},\n    "patch_apply": {\n        "location",\n        "external_root",\n        "path",\n        "patch_content",\n        "check_only",\n    },
     "execute_command": {
         "location",
         "external_root",
@@ -34,9 +34,9 @@ def _registry() -> HandlerRegistry:
 
 
 class TestRegistryBuild:
-    """register_generic_defaults registers the five generic tools."""
+    """register_generic_defaults registers the six generic tools."""
 
-    def test_registers_exactly_the_five_generic_tools(self) -> None:
+    def test_registers_exactly_the_six_generic_tools(self) -> None:
         reg = _registry()
         assert reg.tool_names() == sorted(EXPECTED_NAMES)
         for name in EXPECTED_NAMES:
