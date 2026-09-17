@@ -27,6 +27,7 @@ from galet_tools.tools.file_load_handler2 import FileLoadHandler2
 from galet_tools.tools.file_save_handler import FileSaveHandler2
 from galet_tools.tools.generate_image_handler import GenerateImageHandler
 from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
+from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
     return {
         "file_load": FileLoadHandler2(storage),
         "file_save": FileSaveHandler2(storage),
+        "patch_apply": PatchApplyHandler2(storage),
         "execute_command": CommandExecutionHandler2(storage, sandbox, security),
         "generate_svg": GenerateSvgHandler(),
         "generate_image": GenerateImageHandler(fonts),
