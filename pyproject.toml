@@ -28,6 +28,10 @@ mcp = ["mcp==2.1.1"]
 galet-tools-mcp = "galet_tools.mcp.server:main"
 galet-tools-smoke = "galet_tools.mcp.smoke:main"
 
+[project.urls]
+Homepage = "https://github.com/junwin/galet-tools"
+Repository = "https://github.com/junwin/galet-tools"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
