@@ -44,7 +44,7 @@ class ExecuteCommand2(HandlerV2):
         bash = shutil.which("bash")
         pwsh = shutil.which("pwsh")
         windows_powershell = shutil.which("powershell.exe") if IS_WINDOWS else None
-        if bash:
+        if bash and not IS_WINDOWS:
             shells["bash"] = bash
         if pwsh:
             shells["powershell"] = pwsh
@@ -92,7 +92,7 @@ class ExecuteCommand2(HandlerV2):
                     },
                     "shell": {
                         "type": "string",
-                        "enum": ["none", "bash", "powershell"],
+                        "enum": ["none", *shells],
                         "description": f"Use 'none' for process mode. Available shell-mode values on this host: {available}.",
                     },
                     "location": {"type": "string", "enum": ["sandbox", "external"]},
