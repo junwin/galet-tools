@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -43,8 +43,7 @@ def test_process_arguments_are_not_shell_parsed(tmp_path: Path) -> None:
     values = ["space value", "", "a|b", 'quote"value', "unicode-£"]
     result = handler.execute(request(arguments=["-c", "import json,sys; print(json.dumps(sys.argv[1:]))", *values]))
     assert result["ok"] is True
-    for value in values:
-        assert value in result["stdout"]
+    assert json.loads(result["stdout"]) == values
 
 
 def test_stdin_is_disabled(tmp_path: Path) -> None:
