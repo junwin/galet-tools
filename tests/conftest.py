@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 class FakeStorageResolver:
-    """StorageLocationResolver over a temp root: storage base and named external roots."""
-
     def __init__(self, root: str, external_roots: Optional[Dict[str, str]] = None) -> None:
         self._storage_dir = os.path.join(root, "storage")
         os.makedirs(self._storage_dir, exist_ok=True)
@@ -27,8 +25,6 @@ class FakeStorageResolver:
 
 
 class FakeSandboxResolver:
-    """SandboxRootResolver over a temp root, fenced per account."""
-
     def __init__(self, root: str) -> None:
         self._root = root
 
@@ -39,27 +35,33 @@ class FakeSandboxResolver:
 
 
 class FakeSecurityPolicy:
-    """SecurityPolicy with a fixed allow decision, output limit, and deny list."""
-
     def __init__(self, *, allowed: bool = True, max_chars: int = 10000, denied: Optional[List[str]] = None) -> None:
         self._allowed = allowed
         self._max_chars = max_chars
         self._denied = set(denied or [])
         self.calls: List[Tuple[str, str]] = []
+        self.execution_calls: List[dict] = []
 
     def is_command_allowed(self, command: str, *, wrapper: str = "none") -> bool:
         self.calls.append((command, wrapper))
-        if not self._allowed:
-            return False
-        return command not in self._denied
+        return self._allowed and command not in self._denied
+
+    def is_execution_allowed(self, *, mode: str, executable: str, arguments: Sequence[str], script: str, shell: str) -> bool:
+        self.execution_calls.append({
+            "mode": mode,
+            "executable": executable,
+            "arguments": list(arguments),
+            "script": script,
+            "shell": shell,
+        })
+        candidate = " ".join([executable, *arguments]) if mode == "process" else script
+        return self._allowed and candidate not in self._denied
 
     def max_output_chars(self) -> int:
         return self._max_chars
 
 
 class FakeConfigProvider:
-    """ConfigProvider returning a fixed TrueType font path list."""
-
     def __init__(self, font_paths: Optional[List[str]] = None) -> None:
         self._font_paths = list(font_paths or [])
 
