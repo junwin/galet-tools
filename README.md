@@ -21,7 +21,7 @@ composition root.
 - **Handler framework** — `HandlerV2` ABC, `HandlerRegistry`, schema
   handling, and permission filtering.
 - **Generic tools** — `file_load`, `file_save`, `patch_apply`,
-  `execute_command`, `generate_svg`, and `generate_image`, registered
+  `execute_command`, `execute_command2`, `generate_svg`, and `generate_image`, registered
   under their existing names. `file_load` supports bounded line-range reads.
 - **Ports** — sibling-owned interfaces the host implements, keeping the tools
   free of any host dependency.
@@ -86,7 +86,7 @@ tool set.
 
 ## MCP server
 
-An optional MCP (Model Context Protocol) server exposes the six generic
+An optional MCP (Model Context Protocol) server exposes the generic
 tools over streamable HTTP. Install the extra:
 
 ```bash
@@ -110,9 +110,9 @@ default; point it elsewhere with `--config <path>`.
 null, blank, or (for the two path keys) relative value fails validation.
 Optional keys left out or set to null fall back to their defaults:
 
-- `allowlist` — tools to expose; default is all six (`file_load`,
-  `file_save`, `patch_apply`, `execute_command`, `generate_svg`,
-  `generate_image`).
+- `allowlist` — tools to expose; the default includes `file_load`,
+  `file_save`, `patch_apply`, legacy `execute_command`, structured
+  `execute_command2`, `generate_svg`, and `generate_image`.
 - `external_roots` — named external roots the tools may access; default
   none.
 - `host` — default `127.0.0.1`; loopback only.
@@ -144,7 +144,7 @@ Example round trip (storage root from `galet-mcp.json`):
 ```bash
 galet-tools-smoke call file_save '{"path":"smoke/hello.txt","file_content":"hello galet smoke"}'
 galet-tools-smoke call file_load '{"path":"smoke/hello.txt"}'
-galet-tools-smoke call execute_command '{"command":"pwd","working_directory":"."}'
+galet-tools-smoke call execute_command2 '{"mode":"process","executable":"python","arguments":["-c","print(123)"],"script":"","shell":"none","location":"sandbox","external_root":"","working_directory":".","timeout_seconds":30,"success_exit_codes":[0]}'
 ```
 
 Exit codes: `0` ok; `1` tool reported an error (`isError`); `2` usage or

@@ -1,17 +1,25 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Sequence
 
 
 class SecurityPolicy(Protocol):
-    """Command allow/deny decision and output limits for execute_command."""
+    """Allow/deny decisions and output limits for both command APIs."""
 
     def is_command_allowed(self, command: str, *, wrapper: str = "none") -> bool:
-        """Return whether the command may be executed with the given wrapper.
+        """Evaluate a legacy string command."""
+        ...
 
-        Covers the interactive-shell and shell-syntax refusal rules inline in
-        execute_command today, plus any host deny rules.
-        """
+    def is_execution_allowed(
+        self,
+        *,
+        mode: str,
+        executable: str,
+        arguments: Sequence[str],
+        script: str,
+        shell: str,
+    ) -> bool:
+        """Evaluate a structured process or shell request."""
         ...
 
     def max_output_chars(self) -> int:

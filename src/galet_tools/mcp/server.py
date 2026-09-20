@@ -23,6 +23,7 @@ from galet_tools.mcp.tool_adapter import (
 )
 from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
+from galet_tools.tools.execute_command2 import ExecuteCommand2
 from galet_tools.tools.file_load_handler2 import FileLoadHandler2
 from galet_tools.tools.file_save_handler import FileSaveHandler2
 from galet_tools.tools.generate_image_handler import GenerateImageHandler
@@ -62,6 +63,7 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "file_save": FileSaveHandler2(storage),
         "patch_apply": PatchApplyHandler2(storage),
         "execute_command": CommandExecutionHandler2(storage, sandbox, security),
+        "execute_command2": ExecuteCommand2(storage, sandbox, security),
         "generate_svg": GenerateSvgHandler(),
         "generate_image": GenerateImageHandler(fonts),
     }

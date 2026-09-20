@@ -9,6 +9,7 @@ ALL_REGISTERED = [
     "file_save",
     "patch_apply",
     "execute_command",
+    "execute_command2",
     "generate_svg",
     "generate_image",
 ]
