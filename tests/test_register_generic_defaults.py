@@ -10,6 +10,7 @@ from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler
 
 EXPECTED_NAMES = [
     "execute_command",
+    "execute_command2",
     "file_load",
     "file_save",
     "generate_image",
@@ -35,6 +36,18 @@ PROPERTY_KEYS = {
         "path",
         "patch_content",
         "check_only",
+    },
+    "execute_command2": {
+        "mode",
+        "executable",
+        "arguments",
+        "script",
+        "shell",
+        "location",
+        "external_root",
+        "working_directory",
+        "timeout_seconds",
+        "success_exit_codes",
     },
     "execute_command": {
         "location",
