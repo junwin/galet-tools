@@ -10,6 +10,7 @@ from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
 from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
 from galet_tools.tools.repo_index_handler import RepoIndexHandler
 from galet_tools.tools.repo_search_handler import RepoSearchHandler
+from galet_tools.tools.video_generate_handler import VideoGenerateHandler
 
 
 def register_generic_defaults(reg: HandlerRegistry) -> None:
@@ -23,3 +24,4 @@ def register_generic_defaults(reg: HandlerRegistry) -> None:
     reg.register(RepoIndexHandler)
     reg.register(GenerateSvgHandler)
     reg.register(GenerateImageHandler)
+    reg.register(VideoGenerateHandler)
