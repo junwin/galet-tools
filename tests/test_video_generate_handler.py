@@ -72,6 +72,9 @@ def test_generates_video_from_uploaded_account_image(tmp_path) -> None:
     assert result["duration_seconds"] == 4
     assert result["model"] == "veo-3.1-fast-generate-preview"
     assert result["path"] == f"videos/arla/{result['video_id']}.mp4"
+    assert result["download_url"] == (
+        f"/download/video/{result['video_id']}?accountName=arla"
+    )
     assert (tmp_path / result["path"]).read_bytes() == b"video-data"
 
     assert api.generate_kwargs["image_path"].endswith(f"{image_id}.png")
