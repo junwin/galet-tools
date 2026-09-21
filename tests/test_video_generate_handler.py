@@ -75,6 +75,12 @@ def test_generates_video_from_uploaded_account_image(tmp_path) -> None:
     assert result["download_url"] == (
         f"/download/video/{result['video_id']}?accountName=arla"
     )
+    assert result["video"] == {
+        "url": result["download_url"],
+        "mime_type": "video/mp4",
+        "download_name": f"fashion-reel-{result['video_id']}.mp4",
+        "video_id": result["video_id"],
+    }
     assert (tmp_path / result["path"]).read_bytes() == b"video-data"
 
     assert api.generate_kwargs["image_path"].endswith(f"{image_id}.png")
