@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 import uuid
+from urllib.parse import quote
 
 from galet_tools.framework.handler_v2 import HandlerV2
 from galet_tools.ports.storage_location_resolver import StorageLocationResolver
@@ -77,6 +78,7 @@ class VideoGenerateHandler(HandlerV2):
                 "tool": {"type": "string"},
                 "video_id": {"type": "string"},
                 "path": {"type": "string"},
+                "download_url": {"type": "string"},
                 "mime_type": {"type": "string"},
                 "duration_seconds": {"type": "integer"},
                 "model": {"type": "string"},
@@ -206,6 +208,9 @@ class VideoGenerateHandler(HandlerV2):
             "tool": self.NAME,
             "video_id": video_id,
             "path": f"videos/{account}/{video_id}.mp4",
+            "download_url": (
+                f"/download/video/{video_id}?accountName={quote(account, safe='')}"
+            ),
             "mime_type": "video/mp4",
             "duration_seconds": duration,
             "model": model,
