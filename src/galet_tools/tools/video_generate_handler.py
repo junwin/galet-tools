@@ -79,6 +79,17 @@ class VideoGenerateHandler(HandlerV2):
                 "video_id": {"type": "string"},
                 "path": {"type": "string"},
                 "download_url": {"type": "string"},
+                "video": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "mime_type": {"type": "string"},
+                        "download_name": {"type": "string"},
+                        "video_id": {"type": "string"},
+                    },
+                    "required": ["url", "mime_type", "download_name", "video_id"],
+                    "additionalProperties": False,
+                },
                 "mime_type": {"type": "string"},
                 "duration_seconds": {"type": "integer"},
                 "model": {"type": "string"},
@@ -203,15 +214,22 @@ class VideoGenerateHandler(HandlerV2):
                 "error": str(exc),
             }
 
+        download_url = (
+            f"/download/video/{video_id}?accountName={quote(account, safe='')}"
+        )
         return {
             "ok": True,
             "tool": self.NAME,
             "video_id": video_id,
             "path": f"videos/{account}/{video_id}.mp4",
-            "download_url": (
-                f"/download/video/{video_id}?accountName={quote(account, safe='')}"
-            ),
+            "download_url": download_url,
             "mime_type": "video/mp4",
             "duration_seconds": duration,
             "model": model,
+            "video": {
+                "url": download_url,
+                "mime_type": "video/mp4",
+                "download_name": f"fashion-reel-{video_id}.mp4",
+                "video_id": video_id,
+            },
         }
