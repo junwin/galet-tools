@@ -18,6 +18,7 @@ EXPECTED_NAMES = [
     "patch_apply",
     "repo_index",
     "repo_search",
+    "video_generate",
 ]
 
 PROPERTY_KEYS = {
@@ -60,6 +61,7 @@ PROPERTY_KEYS = {
     },
     "generate_svg": {"svg_code", "description", "width", "height"},
     "generate_image": {"description", "width", "height", "color"},
+    "video_generate": {"image_id", "prompt", "duration_seconds"},
 }
 
 
