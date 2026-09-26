@@ -96,8 +96,9 @@ episodic store, digest generator, and trusted account.
 Run a small SQLite session through creation, event append and read, digest
 preview, archive, an active-session read, and an idempotent
 archive retry, and a reset that clears events while retaining the session
-metadata. It also recalls a note through `VectorSemanticMemory` using
-deterministic embedding and index ports, without an API key:
+metadata. It then writes and indexes the archived digest and recalls it
+through `VectorSemanticMemory` in the `digests` namespace, using deterministic
+embedding and index ports without an API key:
 
 ```bash
 python -m pip install -e '.[memory]'
@@ -108,9 +109,10 @@ If galet-memory 0.1.5 is only available from a sibling checkout, install
 that checkout first with `python -m pip install -e ../galet-memory`.
 
 The example uses a deterministic digest generator and runs all four tool adapters
-with one temporary session and a local note. Semantic recall here uses a
-separate in-memory index; archiving does not automatically publish a digest
-to that index. In an application, inject
+with one temporary session. The example explicitly writes the digest text,
+embeds it, and inserts a `StoredEmbedding` into an in-memory index; curation
+does not automatically publish to semantic memory. It checks that recall is
+empty before publication and returns the digest afterward. In an application, inject
 `galet_memory.curation.CurationService` with the application's digest generator
 and construct `CurateChatHandler(service)` through a registry factory.
 
