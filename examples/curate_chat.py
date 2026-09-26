@@ -1,4 +1,4 @@
-"""Run episodic_memory and curate_chat against one temporary SQLite store.
+"""Run episodic_memory, curate_chat, and reset_session on one SQLite store.
 
 From a galet-tools checkout:
     python -m pip install -e '.[memory]'
@@ -15,6 +15,7 @@ from galet_memory.curation import CurationService, DigestGenerationRequest
 from galet_memory.episodic import SqliteEpisodicMemory
 from galet_tools.tools.curate_chat_handler import CurateChatHandler
 from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
+from galet_tools.tools.reset_session_handler import ResetSessionHandler
 
 
 class ExampleDigestGenerator:
@@ -70,9 +71,20 @@ def main() -> None:
             )
             assert after["ok"] and len(after["session"]["events"]) == 1, after
             assert after["session"]["events"][0]["kind"] == "session_digest", after
+            reset = ResetSessionHandler(store).execute(
+                {}, account_name="example", conversation_id=session_id
+            )
+            assert reset == {"action": "reset_session", "ok": True}, reset
+            cleared = episodic.execute(
+                {"action": "get_session", "session_id": session_id},
+                account_name="example",
+            )
+            assert cleared["ok"] and cleared["session"]["events"] == [], cleared
+            assert cleared["session"]["friendly_name"] == "curation demo", cleared
             print(json.dumps({
                 "created": created, "before": before, "digest": digest,
                 "archive": archived, "retry": retry, "after": after,
+                "reset": reset, "cleared": cleared,
             }, indent=2))
 
 
