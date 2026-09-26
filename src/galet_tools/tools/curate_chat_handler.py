@@ -8,10 +8,10 @@ from galet_tools.framework.handler_v2 import HandlerV2
 
 
 class CurationPort(Protocol):
-    def produce_digest(self, *, account_name: str, session_id: str, max_chars: int = 32000) -> Any: ...
+    def produce_digest(self, *, account_name: str, session_id: str, max_chars: int = 32000, publish: bool = False) -> Any: ...
     def archive(
         self, *, account_name: str, session_id: str, max_chars: int = 32000,
-        idempotency_key: str | None = None,
+        idempotency_key: str | None = None, publish: bool = False,
     ) -> Any: ...
 
 
@@ -51,12 +51,13 @@ class CurateChatHandler(HandlerV2):
                     "max_chars": {
                         "type": "integer", "description": "Maximum input characters for the digest.",
                     },
+                    "publish": {"type": "boolean", "description": "Save and index the digest for semantic recall."},
                     "idempotency_key": {
                         "type": "string",
                         "description": "Stable operation key for retrying archive; empty for a new operation.",
                     },
                 },
-                "required": ["session_id", "mode", "max_chars", "idempotency_key"],
+                "required": ["session_id", "mode", "max_chars", "idempotency_key", "publish"],
                 "additionalProperties": False,
             },
             "strict": True,
@@ -73,6 +74,9 @@ class CurateChatHandler(HandlerV2):
                 "session_id": {"type": "string"},
                 "digest": {"type": "string"},
                 "boundary_event_id": {"type": ["string", "null"]},
+                "published": {"type": "boolean"},
+                "output_path": {"type": ["string", "null"]},
+                "embedding_id": {"type": ["string", "null"]},
                 "error": {"type": "string"},
             },
             "required": ["ok", "tool"],
@@ -89,10 +93,13 @@ class CurateChatHandler(HandlerV2):
         mode = args.get("mode")
         max_chars = args.get("max_chars", 32000)
         key = args.get("idempotency_key") or None
+        publish = args.get("publish", False)
         if not isinstance(session_id, str) or not session_id.strip():
             return error("session_id is required")
         if mode not in ("digest", "archive"):
             return error("mode must be digest or archive")
+        if type(publish) is not bool:
+            return error("publish must be a boolean")
         if type(max_chars) is not int or max_chars <= 0:
             return error("max_chars must be a positive integer")
         if not isinstance(account_name, str) or not account_name.strip() or account_name == "auto":
@@ -106,23 +113,27 @@ class CurateChatHandler(HandlerV2):
             if mode == "digest":
                 result = self.curation.produce_digest(
                     account_name=account_name, session_id=session_id.strip(),
-                    max_chars=max_chars,
+                    max_chars=max_chars, publish=publish,
                 )
             else:
                 result = self.curation.archive(
                     account_name=account_name, session_id=session_id.strip(),
-                    max_chars=max_chars, idempotency_key=key,
+                    max_chars=max_chars, idempotency_key=key, publish=publish,
                 )
         except Exception as exc:
             # The curation package defines its own typed errors; keep this
             # adapter import-free so other hosts can implement the port.
             return error(f"{type(exc).__name__}: {exc}")
         boundary = getattr(result, "boundary_event", None)
+        publication = getattr(result, "publication", None)
         return {
             "ok": True,
             "tool": self.NAME,
-            "status": "archived" if mode == "archive" else "preview",
+            "status": "archived" if mode == "archive" else ("published" if publication else "preview"),
             "session_id": result.session_id,
             "digest": result.digest,
             "boundary_event_id": getattr(boundary, "event_id", None),
+            "published": publication is not None,
+            "output_path": getattr(publication, "path", None),
+            "embedding_id": getattr(publication, "embedding_id", None),
         }
