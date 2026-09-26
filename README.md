@@ -84,6 +84,24 @@ loaded, does not resolve to a callable, or fails during registration raises
 intentionally fail-fast so a host cannot start with an unexpectedly incomplete
 tool set.
 
+## Episodic curation example
+
+The `curate_chat` handler takes an injected curation service. It is intentionally
+not registered as a generic MCP default because the host must supply the
+episodic store, digest generator, and trusted account.
+
+Run a small SQLite session through digest preview, archive, and an idempotent
+archive retry without an LLM key:
+
+```bash
+python -m pip install -e '.[memory]'
+python examples/curate_chat.py
+```
+
+The example uses a deterministic digest generator. In an application, inject
+`galet_memory.curation.CurationService` with the application's digest generator
+and construct `CurateChatHandler(service)` through a registry factory.
+
 ## MCP server
 
 An optional MCP (Model Context Protocol) server exposes the generic
