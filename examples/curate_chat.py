@@ -14,7 +14,7 @@ from tempfile import TemporaryDirectory
 from galet_memory.curation import CurationService, DigestGenerationRequest
 from galet_memory.episodic import SqliteEpisodicMemory
 from galet_memory import VectorSemanticMemory
-from galet_memory.ports import EmbeddingMatch, EmbeddingRecord, FileTextLoader
+from galet_memory.ports import EmbeddingMatch, EmbeddingRecord, FileTextLoader, StoredEmbedding
 from galet_tools.tools.curate_chat_handler import CurateChatHandler
 from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
 from galet_tools.tools.reset_session_handler import ResetSessionHandler
@@ -33,23 +33,37 @@ class ExampleEmbeddings:
 
 
 class ExampleIndex:
-    def __init__(self, path: Path):
-        self.path = path
+    """Small in-memory index for demonstrating explicit digest publication."""
+
+    def __init__(self):
+        self.records: list[StoredEmbedding] = []
+
+    def upsert(self, embedding: StoredEmbedding) -> None:
+        self.records.append(embedding)
 
     def list_namespaces(self, account_name):
-        assert account_name == "example"
-        return ["notes"]
+        return sorted({
+            record.namespace for record in self.records
+            if record.account_name == account_name
+        })
 
     def query(self, *, account_name, namespaces, vector, limit, filters=None):
-        assert account_name == "example" and namespaces == ["notes"]
-        assert vector == [1.0, 0.0] and limit >= 1
-        return [EmbeddingMatch(
-            EmbeddingRecord(
-                id="note-1", source_id="note-1", source_type="document",
-                metadata={"path": str(self.path), "title": "Shop hours", "tags": ["store"]},
-            ),
-            0.9,
-        )]
+        matches = []
+        for stored in self.records:
+            if stored.account_name != account_name or stored.namespace not in namespaces:
+                continue
+            if filters and any(getattr(stored, key) != value for key, value in filters.items()):
+                continue
+            # The deterministic example vectors are identical, so the score
+            # stands in for a real index's similarity calculation.
+            matches.append(EmbeddingMatch(
+                EmbeddingRecord(
+                    id=stored.id, source_id=stored.source_id,
+                    source_type=stored.source_type, metadata=stored.metadata,
+                ),
+                0.9,
+            ))
+        return matches[:limit]
 
 
 def main() -> None:
@@ -110,27 +124,46 @@ def main() -> None:
             )
             assert cleared["ok"] and cleared["session"]["events"] == [], cleared
             assert cleared["session"]["friendly_name"] == "curation demo", cleared
-            note = Path(directory) / "shop-hours.md"
-            note.write_text("The shop opens at nine.", encoding="utf-8")
+            embeddings = ExampleEmbeddings()
+            index = ExampleIndex()
             semantic = SemanticMemoryHandler(VectorSemanticMemory(
-                embeddings=ExampleEmbeddings(),
-                index=ExampleIndex(note),
-                text_loader=FileTextLoader(),
+                embeddings=embeddings, index=index, text_loader=FileTextLoader(),
             ))
-            recalled = semantic.execute(
-                {"action": "recall", "query": "When does the shop open?",
-                 "namespaces": ["notes"]},
-                account_name="example",
-            )
+            recall_args = {
+                "action": "recall", "query": "What happened in this chat?",
+                "namespaces": ["digests"], "source_type": "digest",
+            }
+            before_publish = semantic.execute(recall_args, account_name="example")
+            assert before_publish["ok"] and before_publish["count"] == 0, before_publish
+
+            # The host explicitly publishes the curation result: save the
+            # digest text, embed it, and add a searchable record to its index.
+            digest_path = Path(directory) / "session-digest.md"
+            digest_path.write_text(archived["digest"], encoding="utf-8")
+            vector = embeddings.embed(
+                [archived["digest"]], model="text-embedding-3-small"
+            )[0]
+            index.upsert(StoredEmbedding(
+                id="digest-1", account_name="example", namespace="digests",
+                vector=vector, source_type="digest", source_id=session_id,
+                model="text-embedding-3-small", provider="example",
+                metadata={
+                    "path": str(digest_path), "title": "Curation demo digest",
+                    "session_id": session_id, "tags": ["curation"],
+                },
+            ))
+            recalled = semantic.execute(recall_args, account_name="example")
             assert recalled["ok"] and recalled["count"] == 1, recalled
-            assert recalled["documents"][0]["snippet"] == "The shop opens at nine."
+            assert recalled["documents"][0]["source_id"] == session_id, recalled
+            assert recalled["documents"][0]["snippet"] == archived["digest"], recalled
             namespaces = semantic.execute({"action": "namespaces"}, account_name="example")
-            assert namespaces["ok"] and namespaces["namespaces"] == ["notes"], namespaces
+            assert namespaces["ok"] and namespaces["namespaces"] == ["digests"], namespaces
             print(json.dumps({
                 "created": created, "before": before, "digest": digest,
                 "archive": archived, "retry": retry, "after": after,
                 "reset": reset, "cleared": cleared,
-                "semantic_recall": recalled, "namespaces": namespaces,
+                "before_publish": before_publish, "semantic_recall": recalled,
+                "namespaces": namespaces,
             }, indent=2))
 
 
