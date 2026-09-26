@@ -1,4 +1,4 @@
-"""Run episodic_memory, curate_chat, and reset_session on one SQLite store.
+"""Run episodic, curation, reset, and semantic tools without external services.
 
 From a galet-tools checkout:
     python -m pip install -e '.[memory]'
@@ -13,14 +13,43 @@ from tempfile import TemporaryDirectory
 
 from galet_memory.curation import CurationService, DigestGenerationRequest
 from galet_memory.episodic import SqliteEpisodicMemory
+from galet_memory import VectorSemanticMemory
+from galet_memory.ports import EmbeddingMatch, EmbeddingRecord, FileTextLoader
 from galet_tools.tools.curate_chat_handler import CurateChatHandler
 from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
 from galet_tools.tools.reset_session_handler import ResetSessionHandler
+from galet_tools.tools.semantic_memory_handler import SemanticMemoryHandler
 
 
 class ExampleDigestGenerator:
     def generate(self, request: DigestGenerationRequest) -> str:
         return "Summary: " + " ".join(str(event.content) for event in request.events)
+
+
+class ExampleEmbeddings:
+    def embed(self, texts, *, model):
+        assert texts and model
+        return [[1.0, 0.0] for _ in texts]
+
+
+class ExampleIndex:
+    def __init__(self, path: Path):
+        self.path = path
+
+    def list_namespaces(self, account_name):
+        assert account_name == "example"
+        return ["notes"]
+
+    def query(self, *, account_name, namespaces, vector, limit, filters=None):
+        assert account_name == "example" and namespaces == ["notes"]
+        assert vector == [1.0, 0.0] and limit >= 1
+        return [EmbeddingMatch(
+            EmbeddingRecord(
+                id="note-1", source_id="note-1", source_type="document",
+                metadata={"path": str(self.path), "title": "Shop hours", "tags": ["store"]},
+            ),
+            0.9,
+        )]
 
 
 def main() -> None:
@@ -81,10 +110,27 @@ def main() -> None:
             )
             assert cleared["ok"] and cleared["session"]["events"] == [], cleared
             assert cleared["session"]["friendly_name"] == "curation demo", cleared
+            note = Path(directory) / "shop-hours.md"
+            note.write_text("The shop opens at nine.", encoding="utf-8")
+            semantic = SemanticMemoryHandler(VectorSemanticMemory(
+                embeddings=ExampleEmbeddings(),
+                index=ExampleIndex(note),
+                text_loader=FileTextLoader(),
+            ))
+            recalled = semantic.execute(
+                {"action": "recall", "query": "When does the shop open?",
+                 "namespaces": ["notes"]},
+                account_name="example",
+            )
+            assert recalled["ok"] and recalled["count"] == 1, recalled
+            assert recalled["documents"][0]["snippet"] == "The shop opens at nine."
+            namespaces = semantic.execute({"action": "namespaces"}, account_name="example")
+            assert namespaces["ok"] and namespaces["namespaces"] == ["notes"], namespaces
             print(json.dumps({
                 "created": created, "before": before, "digest": digest,
                 "archive": archived, "retry": retry, "after": after,
                 "reset": reset, "cleared": cleared,
+                "semantic_recall": recalled, "namespaces": namespaces,
             }, indent=2))
 
 
