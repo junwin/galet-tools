@@ -98,6 +98,9 @@ python -m pip install -e '.[memory]'
 python examples/curate_chat.py
 ```
 
+If galet-memory 0.1.5 is only available from a sibling checkout, install
+that checkout first with `python -m pip install -e ../galet-memory`.
+
 The example uses a deterministic digest generator. In an application, inject
 `galet_memory.curation.CurationService` with the application's digest generator
 and construct `CurateChatHandler(service)` through a registry factory.
