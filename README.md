@@ -84,18 +84,20 @@ loaded, does not resolve to a callable, or fails during registration raises
 intentionally fail-fast so a host cannot start with an unexpectedly incomplete
 tool set.
 
-## Episodic memory, curation, and reset example
+## Memory tools example
 
 The `episodic_memory` handler takes an injected episodic store, and
 `curate_chat` takes an injected curation service, and `reset_session` takes
-the same episodic store. It is intentionally
+the same episodic store. `semantic_memory` takes an injected
+`galet_memory.semantic.SemanticMemory`. These tools are intentionally
 not registered as a generic MCP default because the host must supply the
 episodic store, digest generator, and trusted account.
 
 Run a small SQLite session through creation, event append and read, digest
 preview, archive, an active-session read, and an idempotent
 archive retry, and a reset that clears events while retaining the session
-metadata, without an LLM key:
+metadata. It also recalls a note through `VectorSemanticMemory` using
+deterministic embedding and index ports, without an API key:
 
 ```bash
 python -m pip install -e '.[memory]'
@@ -105,8 +107,10 @@ python examples/curate_chat.py
 If galet-memory 0.1.5 is only available from a sibling checkout, install
 that checkout first with `python -m pip install -e ../galet-memory`.
 
-The example uses a deterministic digest generator and runs all three tool adapters
-against the same temporary SQLite store. In an application, inject
+The example uses a deterministic digest generator and runs all four tool adapters
+with one temporary session and a local note. Semantic recall here uses a
+separate in-memory index; archiving does not automatically publish a digest
+to that index. In an application, inject
 `galet_memory.curation.CurationService` with the application's digest generator
 and construct `CurateChatHandler(service)` through a registry factory.
 
