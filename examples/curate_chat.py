@@ -12,6 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from galet_memory.curation import CurationService, DigestGenerationRequest
+from galet_memory.publication import EmbeddingDigestPublisher, FilesystemDigestStore
 from galet_memory.episodic import SqliteEpisodicMemory
 from galet_memory import VectorSemanticMemory
 from galet_memory.ports import EmbeddingMatch, EmbeddingRecord, FileTextLoader, StoredEmbedding
@@ -39,6 +40,7 @@ class ExampleIndex:
         self.records: list[StoredEmbedding] = []
 
     def upsert(self, embedding: StoredEmbedding) -> None:
+        self.records = [record for record in self.records if record.id != embedding.id]
         self.records.append(embedding)
 
     def list_namespaces(self, account_name):
@@ -89,21 +91,40 @@ def main() -> None:
                 account_name="example",
             )
             assert before["ok"] and len(before["session"]["events"]) == 2, before
-            handler = CurateChatHandler(CurationService(store, ExampleDigestGenerator()))
-            base = {"session_id": session_id, "max_chars": 32000, "idempotency_key": ""}
+            embeddings = ExampleEmbeddings()
+            index = ExampleIndex()
+            semantic = SemanticMemoryHandler(VectorSemanticMemory(
+                embeddings=embeddings, index=index, text_loader=FileTextLoader(),
+            ))
+            recall_args = {
+                "action": "recall", "query": "What happened in this chat?",
+                "namespaces": ["digests"], "source_type": "digest",
+            }
+            before_publish = semantic.execute(recall_args, account_name="example")
+            assert before_publish["ok"] and before_publish["count"] == 0, before_publish
+            publisher = EmbeddingDigestPublisher(
+                FilesystemDigestStore(Path(directory) / "digests"), embeddings, index,
+                provider="example",
+            )
+            handler = CurateChatHandler(CurationService(
+                store, ExampleDigestGenerator(), digest_publisher=publisher,
+            ))
+            base = {"session_id": session_id, "max_chars": 32000, "idempotency_key": "", "publish": False}
             digest = handler.execute({**base, "mode": "digest"}, account_name="example")
             assert digest["ok"] and digest["status"] == "preview", digest
             assert len(store.get_session(session_id, include_events=True).events) == 2
             archived = handler.execute(
-                {**base, "mode": "archive", "idempotency_key": "example-operation"},
+                {**base, "mode": "archive", "idempotency_key": "example-operation", "publish": True},
                 account_name="example",
             )
-            assert archived["ok"] and archived["boundary_event_id"], archived
+            assert archived["ok"] and archived["boundary_event_id"] and archived["published"], archived
+            assert Path(archived["output_path"]).read_text(encoding="utf-8") == archived["digest"]
             retry = handler.execute(
                 {**base, "mode": "archive", "idempotency_key": "example-operation"},
                 account_name="example",
             )
             assert retry["boundary_event_id"] == archived["boundary_event_id"], retry
+            assert len(index.records) == 1
             active = store.get_session(
                 session_id, include_events=True, event_scope="active"
             )
@@ -124,34 +145,6 @@ def main() -> None:
             )
             assert cleared["ok"] and cleared["session"]["events"] == [], cleared
             assert cleared["session"]["friendly_name"] == "curation demo", cleared
-            embeddings = ExampleEmbeddings()
-            index = ExampleIndex()
-            semantic = SemanticMemoryHandler(VectorSemanticMemory(
-                embeddings=embeddings, index=index, text_loader=FileTextLoader(),
-            ))
-            recall_args = {
-                "action": "recall", "query": "What happened in this chat?",
-                "namespaces": ["digests"], "source_type": "digest",
-            }
-            before_publish = semantic.execute(recall_args, account_name="example")
-            assert before_publish["ok"] and before_publish["count"] == 0, before_publish
-
-            # The host explicitly publishes the curation result: save the
-            # digest text, embed it, and add a searchable record to its index.
-            digest_path = Path(directory) / "session-digest.md"
-            digest_path.write_text(archived["digest"], encoding="utf-8")
-            vector = embeddings.embed(
-                [archived["digest"]], model="text-embedding-3-small"
-            )[0]
-            index.upsert(StoredEmbedding(
-                id="digest-1", account_name="example", namespace="digests",
-                vector=vector, source_type="digest", source_id=session_id,
-                model="text-embedding-3-small", provider="example",
-                metadata={
-                    "path": str(digest_path), "title": "Curation demo digest",
-                    "session_id": session_id, "tags": ["curation"],
-                },
-            ))
             recalled = semantic.execute(recall_args, account_name="example")
             assert recalled["ok"] and recalled["count"] == 1, recalled
             assert recalled["documents"][0]["source_id"] == session_id, recalled
