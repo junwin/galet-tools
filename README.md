@@ -84,13 +84,15 @@ loaded, does not resolve to a callable, or fails during registration raises
 intentionally fail-fast so a host cannot start with an unexpectedly incomplete
 tool set.
 
-## Episodic curation example
+## Episodic memory and curation example
 
-The `curate_chat` handler takes an injected curation service. It is intentionally
+The `episodic_memory` handler takes an injected episodic store, and
+`curate_chat` takes an injected curation service. It is intentionally
 not registered as a generic MCP default because the host must supply the
 episodic store, digest generator, and trusted account.
 
-Run a small SQLite session through digest preview, archive, and an idempotent
+Run a small SQLite session through creation, event append and read, digest
+preview, archive, an active-session read, and an idempotent
 archive retry without an LLM key:
 
 ```bash
@@ -101,7 +103,8 @@ python examples/curate_chat.py
 If galet-memory 0.1.5 is only available from a sibling checkout, install
 that checkout first with `python -m pip install -e ../galet-memory`.
 
-The example uses a deterministic digest generator. In an application, inject
+The example uses a deterministic digest generator and runs both tool adapters
+against the same temporary SQLite store. In an application, inject
 `galet_memory.curation.CurationService` with the application's digest generator
 and construct `CurateChatHandler(service)` through a registry factory.
 
