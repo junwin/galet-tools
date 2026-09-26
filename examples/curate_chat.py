@@ -1,4 +1,4 @@
-"""Run curate_chat with a temporary SQLite store and no API key.
+"""Run episodic_memory and curate_chat against one temporary SQLite store.
 
 From a galet-tools checkout:
     python -m pip install -e '.[memory]'
@@ -12,8 +12,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from galet_memory.curation import CurationService, DigestGenerationRequest
-from galet_memory.episodic import EpisodicEvent, SqliteEpisodicMemory
+from galet_memory.episodic import SqliteEpisodicMemory
 from galet_tools.tools.curate_chat_handler import CurateChatHandler
+from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
 
 
 class ExampleDigestGenerator:
@@ -24,23 +25,31 @@ class ExampleDigestGenerator:
 def main() -> None:
     with TemporaryDirectory() as directory:
         with SqliteEpisodicMemory(str(Path(directory) / "sessions.sqlite")) as store:
-            session = store.create_session(
-                account_name="example", agent_name="demo",
-                friendly_name="curation demo",
+            episodic = EpisodicMemoryHandler(store)
+            created = episodic.execute(
+                {"action": "create_session", "agent_name": "demo",
+                 "friendly_name": "curation demo"},
+                account_name="example",
             )
-            store.append_event(
-                session.session_id,
-                EpisodicEvent(role="user", actor="visitor", kind="message", content="Hello."),
+            assert created["ok"], created
+            session_id = created["session"]["session_id"]
+            for role, text in (("user", "Hello."), ("assistant", "Welcome.")):
+                added = episodic.execute(
+                    {"action": "append_event", "session_id": session_id,
+                     "role": role, "kind": "message", "content": text},
+                    account_name="example",
+                )
+                assert added["ok"], added
+            before = episodic.execute(
+                {"action": "get_session", "session_id": session_id},
+                account_name="example",
             )
-            store.append_event(
-                session.session_id,
-                EpisodicEvent(role="assistant", actor="demo", kind="message", content="Welcome."),
-            )
+            assert before["ok"] and len(before["session"]["events"]) == 2, before
             handler = CurateChatHandler(CurationService(store, ExampleDigestGenerator()))
-            base = {"session_id": session.session_id, "max_chars": 32000, "idempotency_key": ""}
+            base = {"session_id": session_id, "max_chars": 32000, "idempotency_key": ""}
             digest = handler.execute({**base, "mode": "digest"}, account_name="example")
             assert digest["ok"] and digest["status"] == "preview", digest
-            assert len(store.get_session(session.session_id, include_events=True).events) == 2
+            assert len(store.get_session(session_id, include_events=True).events) == 2
             archived = handler.execute(
                 {**base, "mode": "archive", "idempotency_key": "example-operation"},
                 account_name="example",
@@ -52,10 +61,19 @@ def main() -> None:
             )
             assert retry["boundary_event_id"] == archived["boundary_event_id"], retry
             active = store.get_session(
-                session.session_id, include_events=True, event_scope="active"
+                session_id, include_events=True, event_scope="active"
             )
             assert active is not None and len(active.events) == 1
-            print(json.dumps({"digest": digest, "archive": archived, "retry": retry}, indent=2))
+            after = episodic.execute(
+                {"action": "get_session", "session_id": session_id},
+                account_name="example",
+            )
+            assert after["ok"] and len(after["session"]["events"]) == 1, after
+            assert after["session"]["events"][0]["kind"] == "session_digest", after
+            print(json.dumps({
+                "created": created, "before": before, "digest": digest,
+                "archive": archived, "retry": retry, "after": after,
+            }, indent=2))
 
 
 if __name__ == "__main__":
