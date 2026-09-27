@@ -1,5 +1,9 @@
 # galet-tools
 
+**Action and handler layer.** Galet-tools supplies the handler contract, registry, generic tools, discovery, and optional MCP exposure for configured tools. A host application selects the handlers an agent may use and supplies configuration and permissions. Memory handlers should delegate memory behavior to galet-memory rather than duplicate it; model-facing operations use galet's interfaces where appropriate.
+
+The MCP server currently exposes a configured subset of generic tools; the presence of a handler does not automatically make it available or authorized. See the [Galet package responsibilities](https://github.com/junwin/galet/blob/main/docs/architecture.md) for the full layering.
+
 Self-contained generic tool handlers and the handler framework they run on.
 
 ## Lineage
