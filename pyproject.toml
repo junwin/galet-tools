@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "galet-tools"
-version = "0.1.7"
+version = "0.1.10"
 description = "Self-contained generic tool handlers and handler framework extracted from the Lucy monorepo"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,8 +23,8 @@ classifiers = [
 
 [project.optional-dependencies]
 mcp = ["mcp==2.1.1"]
-video = ["galet>=0.1.3"]
-memory = ["galet-memory>=0.1.5"]
+video = ["galet>=0.1.12"]
+memory = ["galet-memory>=0.1.11"]
 
 [project.scripts]
 galet-tools-mcp = "galet_tools.mcp.server:main"
