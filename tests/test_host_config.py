@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from galet_tools.host.config import (
-    REGISTERED_TOOL_NAMES,
+    DEFAULT_ALLOWLIST,
     GaletConfig,
     GaletConfigError,
     load_config,
@@ -23,7 +23,7 @@ OPTIONAL_KEYS = ("allowlist", "external_roots", "host", "port", "fonts")
 def _base(tmp_path: Path) -> dict:
     return {
         "account": "junwin",
-        "allowlist": list(REGISTERED_TOOL_NAMES),
+        "allowlist": list(DEFAULT_ALLOWLIST),
         "storage_root": str(tmp_path / "lucy_storage"),
         "storage_namespace": "main",
         "external_roots": {},
@@ -78,7 +78,7 @@ class TestOptionalDefaults:
         self._assert_defaults(load_config(_write_config(tmp_path, **{key: None})))
 
     def _assert_defaults(self, cfg: GaletConfig) -> None:
-        assert cfg.allowlist == list(REGISTERED_TOOL_NAMES)
+        assert cfg.allowlist == DEFAULT_ALLOWLIST
         assert cfg.external_roots == {}
         assert cfg.host == "127.0.0.1"
         assert cfg.port == 8765
@@ -157,3 +157,4 @@ class TestHostPortFonts:
         path = _write_config(tmp_path, fonts=fonts)
         with pytest.raises(GaletConfigError, match="key 'fonts' must be a list"):
             load_config(path)
+

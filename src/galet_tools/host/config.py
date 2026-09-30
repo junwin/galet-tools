@@ -26,6 +26,8 @@ REGISTERED_TOOL_NAMES = (
 )
 
 DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
+# Provider-backed media tools are available when explicitly allowed.
+REGISTERED_TOOL_NAMES += ("image_generate", "video_generate")
 
 
 class GaletConfigError(Exception):
@@ -165,3 +167,4 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         port=port,
         fonts=fonts,
     )
+

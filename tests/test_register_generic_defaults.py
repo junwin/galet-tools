@@ -14,6 +14,7 @@ EXPECTED_NAMES = [
     "file_load",
     "file_save",
     "generate_image",
+    "image_generate",
     "generate_svg",
     "patch_apply",
     "repo_index",
@@ -104,3 +105,4 @@ class TestRegistryBuild:
         register_generic_defaults(reg)
         with pytest.raises(ValueError):
             reg.register(CommandExecutionHandler2)
+

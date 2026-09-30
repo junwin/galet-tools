@@ -27,6 +27,8 @@ from galet_tools.tools.execute_command2 import ExecuteCommand2
 from galet_tools.tools.file_load_handler2 import FileLoadHandler2
 from galet_tools.tools.file_save_handler import FileSaveHandler2
 from galet_tools.tools.generate_image_handler import GenerateImageHandler
+from galet_tools.tools.image_generate_handler import ImageGenerateHandler
+from galet_tools.tools.video_generate_handler import VideoGenerateHandler
 from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
 from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
 
@@ -66,6 +68,8 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "execute_command2": ExecuteCommand2(storage, sandbox, security),
         "generate_svg": GenerateSvgHandler(),
         "generate_image": GenerateImageHandler(fonts),
+        "image_generate": ImageGenerateHandler(storage),
+        "video_generate": VideoGenerateHandler(storage),
     }
 
 
@@ -227,3 +231,4 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
