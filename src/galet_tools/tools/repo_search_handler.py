@@ -9,7 +9,7 @@ from galet_tools.tools.repository_index import RepositoryIndex
 
 
 class RepoSearchHandler(HandlerV2):
-    """Rank repository files using paths and Python structural metadata."""
+    """Rank Python and other supported source files using structure and text."""
 
     NAME = "repo_search"
 
@@ -26,9 +26,10 @@ class RepoSearchHandler(HandlerV2):
             "type": "function",
             "name": cls.NAME,
             "description": (
-                "Find likely Python implementation files for a concept using paths, classes, "
-                "methods, functions, docstrings, and imports. Tests are excluded by default. "
-                "Use repo_index after discovery to get exact symbol line ranges before file_load."
+                "Find likely implementation files in a source repository using paths and file "
+                "content; Python files also use classes, methods, functions, docstrings, and "
+                "imports. Tests are excluded by default. Use repo_index after discovery to get "
+                "Python AST ranges or matching text lines before file_load."
             ),
             "parameters": {
                 "type": "object",

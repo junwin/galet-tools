@@ -23,6 +23,9 @@ composition root.
 - **Generic tools** — `file_load`, `file_save`, `patch_apply`,
   `execute_command`, `execute_command2`, `generate_svg`, and `generate_image`, registered
   under their existing names. `file_load` supports bounded line-range reads.
+- **Repository navigation** — `repo_index` and `repo_search` preserve Python AST
+  navigation and also search supported JavaScript, TypeScript, C#, Java, and other
+  source files using bounded text indexing.
 - **Ports** — sibling-owned interfaces the host implements, keeping the tools
   free of any host dependency.
 - **Handler discovery** — installed packages can contribute handlers through
@@ -60,6 +63,16 @@ register_installed_handlers(registry)
 Discovery adds installed capabilities to the registry; it does not grant them
 to an agent. The host should continue to apply its agent and context allowlists
 when selecting tool definitions.
+
+### Repository navigation
+
+`repo_index` maps supported source files, looks up a file or directory, and
+finds symbols. Python files use AST-based classes, functions, methods, and exact
+line ranges. Other supported languages, including JavaScript, TypeScript, and
+C#, use a lightweight text index that returns matching lines and line numbers.
+`repo_search` ranks both Python and other source files using paths and content;
+Python also uses structural metadata. Common dependency, generated, and build
+directories are skipped, and tests are omitted unless `include_tests` is true.
 
 ### Creating a handler extension
 
