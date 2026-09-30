@@ -9,7 +9,7 @@ from galet_tools.tools.repository_index import RepositoryIndex
 
 
 class RepoIndexHandler(HandlerV2):
-    """Inspect Python repository structure without loading source bodies."""
+    """Inspect source repository structure and searchable file metadata."""
 
     NAME = "repo_index"
 
@@ -26,11 +26,11 @@ class RepoIndexHandler(HandlerV2):
             "type": "function",
             "name": cls.NAME,
             "description": (
-                "Inspect Python repository structure. Use operation='symbol' to locate a class, "
-                "function, method, or qualified Class.method and get exact source line ranges; "
-                "operation='lookup' to inspect imports/classes/methods/functions for a known file "
-                "or directory; operation='map' for a compact list of Python files. Prefer this "
-                "before broad file reads."
+                "Inspect a source repository. For Python, operation='symbol' locates classes, "
+                "functions, methods, and qualified Class.method names with AST line ranges. For "
+                "other supported languages it returns matching text lines. operation='lookup' "
+                "returns Python structure or basic metadata for a file/directory; operation='map' "
+                "lists supported source files. Prefer this before broad file reads."
             ),
             "parameters": {
                 "type": "object",
