@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "galet-tools"
-version = "0.1.16"
+version = "0.1.17"
 description = "Self-contained generic tool handlers and handler framework extracted from the Lucy monorepo"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,3 +40,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
