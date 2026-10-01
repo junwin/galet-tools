@@ -166,8 +166,23 @@ Optional keys left out or set to null fall back to their defaults:
 
 ### What it exposes
 
-`tools/list` and `tools/call` over streamable HTTP at
-`http://127.0.0.1:8765/mcp`.
+`tools/list` and `tools/call` over streamable HTTP. With the default port, the
+endpoint is `http://127.0.0.1:8765/mcp`.
+
+### Test interactively with MCP Inspector
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) provides a
+browser interface for testing galet-tools as an MCP user. Start
+`galet-tools-mcp`, then run:
+
+```bash
+npx --yes @modelcontextprotocol/inspector@latest --web --server-url http://127.0.0.1:8700/mcp --transport http
+```
+
+This command requires Node.js and npm. The server URL must use the `port` from
+your `galet-mcp.json`; the example above uses `8700`. In the Inspector, use
+**Tools** to list the tools, inspect their schemas, enter arguments, and run
+real `tools/call` requests against the server.
 
 ### Smoke-test from the CLI
 

@@ -18,7 +18,7 @@
   },
   "sandbox_root": "/home/junwin/sandbox",
   "host": "127.0.0.1",
-  "port": 8765,
+  "port": 8700,
   "fonts": [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
   ]
