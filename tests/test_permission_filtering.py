@@ -93,11 +93,11 @@ class TestRegistryEligible:
     def test_registry_eligible_tool_defs_intersects_agent(self) -> None:
         reg = HandlerRegistry()
         register_generic_defaults(reg)
-        result = reg.eligible_tool_defs(_agent(["file_save", "generate_image"]))
-        assert _names(result) == ["file_save", "generate_image"]
+        result = reg.eligible_tool_defs(_agent(["file_save", "generate_svg"]))
+        assert _names(result) == ["file_save", "generate_svg"]
 
     def test_registry_eligible_tool_names_preserve_registry_order(self) -> None:
         reg = HandlerRegistry()
         register_generic_defaults(reg)
-        result = reg.eligible_tool_names(_agent(["generate_image", "execute_command"]))
-        assert result == ["execute_command", "generate_image"]
+        result = reg.eligible_tool_names(_agent(["generate_svg", "execute_command"]))
+        assert result == ["execute_command", "generate_svg"]

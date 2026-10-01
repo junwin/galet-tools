@@ -21,7 +21,7 @@ composition root.
 - **Handler framework** — `HandlerV2` ABC, `HandlerRegistry`, schema
   handling, and permission filtering.
 - **Generic tools** — `file_load`, `file_save`, `patch_apply`,
-  `execute_command`, `execute_command2`, `generate_svg`, and `generate_image`, registered
+  `execute_command`, `execute_command2`, and `generate_svg`, registered
   under their existing names. `file_load` supports bounded line-range reads.
 - **Repository navigation** — `repo_index` and `repo_search` preserve Python AST
   navigation and also search supported JavaScript, TypeScript, C#, Java, and other
@@ -157,7 +157,7 @@ Optional keys left out or set to null fall back to their defaults:
 
 - `allowlist` — tools to expose; the default includes `file_load`,
   `file_save`, `patch_apply`, legacy `execute_command`, structured
-  `execute_command2`, `generate_svg`, and `generate_image`.
+  `execute_command2`, `generate_svg`.
 - `external_roots` — named external roots the tools may access; default
   none.
 - `host` — default `127.0.0.1`; loopback only.

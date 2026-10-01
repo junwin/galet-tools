@@ -22,7 +22,6 @@ REGISTERED_TOOL_NAMES = (
     "execute_command",
     "execute_command2",
     "generate_svg",
-    "generate_image",
 )
 
 DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
@@ -167,4 +166,3 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         port=port,
         fonts=fonts,
     )
-

@@ -7,7 +7,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 from urllib.request import urlopen
 from PIL import Image
 from typing import Any
@@ -44,7 +44,7 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
                 }, "required": ["role", "text", "image_ids"], "additionalProperties": False}},
         }
         return {"type": "function", "name": cls.NAME,
-                "description": "Generate or edit an AI image using Galet. Reference images are sent as image data. Saves a PNG and returns its image UUID, path, and display URL. Use the UUID for later edits.",
+                "description": "Generate or edit an AI image using Galet. Reference images are sent as image data. Saves a PNG and returns compact metadata: image UUID, storage path and MIME type. The host delivers the image separately. Use the UUID for later edits.",
                 "parameters": {"type": "object", "properties": properties,
                                "required": list(properties), "additionalProperties": False}, "strict": True}
 
@@ -54,10 +54,7 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
             "ok": {"type": "boolean"}, "tool": {"type": "string"},
             "model": {"type": "string"}, "error": {"type": "string"},
             "image_id": {"type": "string"}, "path": {"type": "string"},
-            "download_url": {"type": "string"}, "mime_type": {"type": "string"},
-            "image": {"type": "object", "properties": {
-                "url": {"type": "string"}, "alt": {"type": "string"}},
-                "required": ["url", "alt"], "additionalProperties": False}},
+            "mime_type": {"type": "string"}},
             "required": ["ok", "tool"], "additionalProperties": False}
 
     def _get_image_api(self) -> Any:
@@ -151,11 +148,8 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
                 raise ValueError("image model returned no images")
             result = response.images[0]
             image_id, path = self._persist_image(result, account, prompt)
-            download_url = f"/download/image/{image_id}?accountName={quote(account, safe='')}"
             return {"ok": True, "tool": self.NAME, "model": response.model or model,
-                    "image_id": image_id, "path": path, "mime_type": "image/png",
-                    "download_url": download_url,
-                    "image": {"url": download_url, "alt": prompt}}
+                    "image_id": image_id, "path": path, "mime_type": "image/png"}
         except Exception as exc:
             logger.exception("image_generate failed")
             return {"ok": False, "tool": self.NAME, "error": str(exc)}

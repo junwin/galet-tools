@@ -12,7 +12,6 @@ from galet_tools.framework.handler_registry import HandlerRegistry
 from galet_tools.host.adapters import (
     ConfigSandboxRootResolver,
     ConfigStorageLocationResolver,
-    GaletConfigProvider,
 )
 from galet_tools.host.config import GaletConfig, GaletConfigError, load_config
 from galet_tools.host.security import DefaultSecurityPolicy
@@ -26,7 +25,6 @@ from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler
 from galet_tools.tools.execute_command2 import ExecuteCommand2
 from galet_tools.tools.file_load_handler2 import FileLoadHandler2
 from galet_tools.tools.file_save_handler import FileSaveHandler2
-from galet_tools.tools.generate_image_handler import GenerateImageHandler
 from galet_tools.tools.image_generate_handler import ImageGenerateHandler
 from galet_tools.tools.video_generate_handler import VideoGenerateHandler
 from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
@@ -59,7 +57,6 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
     storage = ConfigStorageLocationResolver(config)
     sandbox = ConfigSandboxRootResolver(config)
     security = DefaultSecurityPolicy()
-    fonts = GaletConfigProvider(config)
     return {
         "file_load": FileLoadHandler2(storage),
         "file_save": FileSaveHandler2(storage),
@@ -67,7 +64,6 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "execute_command": CommandExecutionHandler2(storage, sandbox, security),
         "execute_command2": ExecuteCommand2(storage, sandbox, security),
         "generate_svg": GenerateSvgHandler(),
-        "generate_image": GenerateImageHandler(fonts),
         "image_generate": ImageGenerateHandler(storage),
         "video_generate": VideoGenerateHandler(storage),
     }
@@ -231,4 +227,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

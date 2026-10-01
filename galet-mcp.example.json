@@ -6,8 +6,7 @@
     "patch_apply",
     "execute_command",
     "execute_command2",
-    "generate_svg",
-    "generate_image"
+    "generate_svg"
   ],
   "storage_root": "/home/junwin/lucy_storage",
   "storage_namespace": "galet",

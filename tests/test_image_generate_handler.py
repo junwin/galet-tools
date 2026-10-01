@@ -35,7 +35,7 @@ def test_text_generation_calls_galet_and_stores_png(tmp_path):
     handler, api = make_handler(tmp_path)
     result = handler.execute({'prompt': 'A wooded hill', 'model': 'gpt-image-1'}, account_name='john')
     assert result['ok']
-    assert result['image']['url'].startswith('/download/image/')
+    assert set(result) == {'ok', 'tool', 'model', 'image_id', 'path', 'mime_type'}
     assert result['mime_type'] == 'image/png'
     assert (tmp_path / result['path']).read_bytes().startswith(b'\x89PNG')
     metadata = json.loads((tmp_path / 'images' / 'john' / (result['image_id'] + '.json')).read_text())
