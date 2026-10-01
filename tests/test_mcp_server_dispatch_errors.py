@@ -11,7 +11,6 @@ ALL_REGISTERED = [
     "execute_command",
     "execute_command2",
     "generate_svg",
-    "generate_image",
 ]
 
 

@@ -13,7 +13,6 @@ EXPECTED_NAMES = [
     "execute_command2",
     "file_load",
     "file_save",
-    "generate_image",
     "image_generate",
     "generate_svg",
     "patch_apply",
@@ -61,7 +60,6 @@ PROPERTY_KEYS = {
         "wrapper",
     },
     "generate_svg": {"svg_code", "description", "width", "height"},
-    "generate_image": {"description", "width", "height", "color"},
     "video_generate": {"image_id", "prompt", "duration_seconds"},
 }
 
@@ -105,4 +103,3 @@ class TestRegistryBuild:
         register_generic_defaults(reg)
         with pytest.raises(ValueError):
             reg.register(CommandExecutionHandler2)
-
