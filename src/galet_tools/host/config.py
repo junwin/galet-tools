@@ -22,11 +22,13 @@ REGISTERED_TOOL_NAMES = (
     "execute_command",
     "execute_command2",
     "generate_svg",
+    "repo_index",
+    "repo_search",
+    "image_generate",
+    "video_generate",
 )
 
 DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
-# Provider-backed media tools are available when explicitly allowed.
-REGISTERED_TOOL_NAMES += ("image_generate", "video_generate")
 
 
 class GaletConfigError(Exception):

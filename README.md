@@ -157,7 +157,8 @@ Optional keys left out or set to null fall back to their defaults:
 
 - `allowlist` — tools to expose; the default includes `file_load`,
   `file_save`, `patch_apply`, legacy `execute_command`, structured
-  `execute_command2`, `generate_svg`.
+  `execute_command2`, `generate_svg`, `repo_index`, `repo_search`,
+  `image_generate`, and `video_generate`.
 - `external_roots` — named external roots the tools may access; default
   none.
 - `host` — default `127.0.0.1`; loopback only.
@@ -168,6 +169,11 @@ Optional keys left out or set to null fall back to their defaults:
 
 `tools/list` and `tools/call` over streamable HTTP. With the default port, the
 endpoint is `http://127.0.0.1:8765/mcp`.
+
+The default allowlist exposes every generic tool registered by galet-tools.
+Image and video generation still need their corresponding provider support
+installed and configured; repository indexing and search work on local folders
+and configured external roots.
 
 ### Test interactively with MCP Inspector
 

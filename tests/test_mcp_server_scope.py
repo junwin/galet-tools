@@ -94,6 +94,7 @@ def test_scope_tool_names_match_advertised_tools(tmp_path):
     scope, mcp_tools = resolve_startup_scope(_config(tmp_path))
     assert mcp_tools
     assert set(scope.tool_names) == {tool["name"] for tool in mcp_tools}
+    assert set(scope.handlers) == set(REGISTERED_TOOL_NAMES)
     for tool in mcp_tools:
         assert set(tool) == {"name", "description", "inputSchema"}
 

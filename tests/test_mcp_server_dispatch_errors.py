@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-from galet_tools.host.config import GaletConfig
+from galet_tools.host.config import GaletConfig, REGISTERED_TOOL_NAMES
 from galet_tools.mcp.server import McpScope, dispatch_call, resolve_startup_scope
 from tests.mcp_stubs import BoomHandler, RecordingHandler, StringResultHandler
 
-ALL_REGISTERED = [
-    "file_load",
-    "file_save",
-    "patch_apply",
-    "execute_command",
-    "execute_command2",
-    "generate_svg",
-]
+ALL_REGISTERED = list(REGISTERED_TOOL_NAMES)
 
 
 def _config(tmp_path, *, allowlist=None):
