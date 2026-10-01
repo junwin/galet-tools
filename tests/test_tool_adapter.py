@@ -2,9 +2,8 @@
 
 Pure/offline: no MCP SDK, no network, no server process. Registry coverage
 runs against the real generic registry (``register_generic_defaults``) so any
-future handler whose ``tool_def()`` stops translating losslessly to an MCP
-tool fails CI. Mirrors Lucy's ``tests/test_tool_adapter.py`` on the
-galet-tools adapter.
+future handler whose ``tool_def()`` exposes a non-portable schema fails CI.
+Mirrors Lucy's ``tests/test_tool_adapter.py`` on the galet-tools adapter.
 """
 
 from __future__ import annotations
@@ -52,6 +51,16 @@ def _source_def(tool_def: Dict[str, Any]) -> Dict[str, Any]:
     return function if isinstance(function, dict) else tool_def
 
 
+def _has_array_type(schema: Any) -> bool:
+    if isinstance(schema, dict):
+        if isinstance(schema.get("type"), list):
+            return True
+        return any(_has_array_type(value) for value in schema.values())
+    if isinstance(schema, list):
+        return any(_has_array_type(value) for value in schema)
+    return False
+
+
 class _StubToolHandler(HandlerV2):
     """Stub handler whose name() collides in the duplicate-name tests."""
 
@@ -81,9 +90,11 @@ class _StubToolHandlerLookalike(_StubToolHandler):
 
 
 class TestRegistryConformance:
-    """Every registered handler translates losslessly; duplicates cannot surface."""
+    """Every registered handler uses portable schemas; duplicates cannot surface."""
 
-    def test_all_registered_tool_defs_translate_losslessly(self, real_registry: HandlerRegistry) -> None:
+    def test_all_registered_tool_defs_use_portable_schemas(
+        self, real_registry: HandlerRegistry
+    ) -> None:
         tool_defs = real_registry.tools()
         assert tool_defs, "conformance over an empty registry would be vacuous"
 
@@ -106,7 +117,7 @@ class TestRegistryConformance:
 
             assert mcp_tool["name"] == source["name"]
             assert mcp_tool["description"] == source["description"]
-            assert mcp_tool["inputSchema"] == source["parameters"]
+            assert not _has_array_type(mcp_tool["inputSchema"])
             assert mcp_tool["inputSchema"] is not source["parameters"]
 
             mcp_names.append(mcp_tool["name"])
@@ -114,7 +125,24 @@ class TestRegistryConformance:
         assert len(mcp_names) == len(tool_defs)
         assert sorted(mcp_names) == real_registry.tool_names()
 
-    def test_duplicate_defs_rejected_and_translation_idempotent(self, real_registry: HandlerRegistry) -> None:
+    def test_file_load_nullable_fields_use_any_of(
+        self, real_registry: HandlerRegistry
+    ) -> None:
+        mcp_tools = {
+            tool["name"]: handler_tool_def_to_mcp(tool)
+            for tool in real_registry.tools()
+        }
+        properties = mcp_tools["file_load"]["inputSchema"]["properties"]
+        for name in ("start_line", "line_count"):
+            assert properties[name]["anyOf"] == [
+                {"type": "integer"},
+                {"type": "null"},
+            ]
+            assert "type" not in properties[name]
+
+    def test_duplicate_defs_rejected_and_translation_idempotent(
+        self, real_registry: HandlerRegistry
+    ) -> None:
         registry = HandlerRegistry()
         registry.register(_StubToolHandler)
         with pytest.raises(ValueError, match="Duplicate handler name registered"):
@@ -178,6 +206,41 @@ class TestLayoutRules:
     def test_missing_parameters_defaults_to_empty_schema(self) -> None:
         mcp_tool = handler_tool_def_to_mcp({"name": "bare_tool", "description": "d"})
         assert mcp_tool["inputSchema"] == {}
+
+    def test_nullable_type_arrays_become_any_of_branches(self) -> None:
+        tool_def = {
+            "name": "nullable_tool",
+            "description": "d",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_line": {
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                        "description": "optional starting line",
+                    },
+                    "line_count": {
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                    },
+                },
+            },
+        }
+
+        translated = handler_tool_def_to_mcp(tool_def)["inputSchema"]
+        assert translated["properties"]["start_line"] == {
+            "anyOf": [{"type": "integer"}, {"type": "null"}],
+            "minimum": 1,
+            "description": "optional starting line",
+        }
+        assert translated["properties"]["line_count"]["anyOf"] == [
+            {"type": "integer"},
+            {"type": "null"},
+        ]
+        assert tool_def["parameters"]["properties"]["start_line"]["type"] == [
+            "integer",
+            "null",
+        ]
 
     def test_input_schema_is_a_deep_copy(self) -> None:
         tool_def = {

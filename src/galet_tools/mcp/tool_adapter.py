@@ -13,10 +13,10 @@ Mapping (OpenAI/Responses ``tool_def()`` -> MCP tool)::
     description               description
     parameters (JSON Schema)  inputSchema
 
-The parameters block is already JSON Schema, so the translation is structural,
-not semantic: ``inputSchema`` is the handler's ``parameters`` verbatim. Any
-extra ``tool_def()`` keys (``type``, ``strict``, ...) are not part of an MCP
-tool and are dropped.
+The parameters block is JSON Schema. The adapter preserves its semantics while
+normalizing array-valued ``type`` declarations into ``anyOf`` branches for
+clients with less portable schema dialects. Any extra ``tool_def()`` keys
+(``type``, ``strict``, ...) are not part of an MCP tool and are dropped.
 
 Two ``tool_def()`` layouts are accepted, because both have existed in Lucy's
 handler family:
@@ -60,11 +60,42 @@ _DESCRIPTION_KEY = "description"
 _PARAMETERS_KEY = "parameters"
 
 
+def _normalize_schema(schema: Any) -> Any:
+    """Normalize array-valued JSON Schema types to portable anyOf branches."""
+    if isinstance(schema, list):
+        return [_normalize_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    normalized = {
+        key: _normalize_schema(value)
+        for key, value in schema.items()
+        if key != "type"
+    }
+    schema_type = schema.get("type")
+    if isinstance(schema_type, list):
+        type_branches = [{"type": item} for item in schema_type]
+        existing_composition = []
+        for keyword in ("anyOf", "allOf"):
+            if keyword in normalized:
+                existing_composition.append({keyword: normalized.pop(keyword)})
+        if existing_composition:
+            normalized["allOf"] = [
+                {"anyOf": type_branches},
+                *existing_composition,
+            ]
+        else:
+            normalized["anyOf"] = type_branches
+    elif "type" in schema:
+        normalized["type"] = schema_type
+    return normalized
+
+
 def handler_tool_def_to_mcp(tool_def: Dict[str, Any]) -> Dict[str, Any]:
     """Translate a Lucy ``HandlerV2.tool_def()`` into an MCP tool definition.
 
     The result is ``{"name", "description", "inputSchema"}`` with
-    ``inputSchema`` being a deep copy of the handler's ``parameters`` block, so
+    ``inputSchema`` being a normalized deep copy of the handler's ``parameters`` block, so
     later MCP-side mutation can never alias back into registry-owned defs.
 
     Raises ``ValueError`` with a clear message when the def cannot be
@@ -113,7 +144,7 @@ def handler_tool_def_to_mcp(tool_def: Dict[str, Any]) -> Dict[str, Any]:
     return {
         _NAME_KEY: name,
         _DESCRIPTION_KEY: description,
-        _MCP_INPUT_SCHEMA_KEY: copy.deepcopy(parameters),
+        _MCP_INPUT_SCHEMA_KEY: _normalize_schema(copy.deepcopy(parameters)),
     }
 
 
