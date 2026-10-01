@@ -1,6 +1,15 @@
 """AI image generation/editing through Galet's provider-neutral image API."""
 from __future__ import annotations
 import logging
+import base64
+import io
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote, urlparse
+from urllib.request import urlopen
+from PIL import Image
 from typing import Any
 from galet_tools.framework.handler_v2 import HandlerV2
 from galet_tools.ports.storage_location_resolver import StorageLocationResolver
@@ -35,7 +44,7 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
                 }, "required": ["role", "text", "image_ids"], "additionalProperties": False}},
         }
         return {"type": "function", "name": cls.NAME,
-                "description": "Generate or edit an AI image using Galet. Reference images are sent as image data. Returns an inline image for display.",
+                "description": "Generate or edit an AI image using Galet. Reference images are sent as image data. Saves a PNG and returns its image UUID, path, and display URL. Use the UUID for later edits.",
                 "parameters": {"type": "object", "properties": properties,
                                "required": list(properties), "additionalProperties": False}, "strict": True}
 
@@ -44,6 +53,8 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
         return {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "tool": {"type": "string"},
             "model": {"type": "string"}, "error": {"type": "string"},
+            "image_id": {"type": "string"}, "path": {"type": "string"},
+            "download_url": {"type": "string"}, "mime_type": {"type": "string"},
             "image": {"type": "object", "properties": {
                 "url": {"type": "string"}, "alt": {"type": "string"}},
                 "required": ["url", "alt"], "additionalProperties": False}},
@@ -54,6 +65,51 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
             from galet.imagegen_router import ImageGenRouter
             self._image_api = ImageGenRouter()
         return self._image_api
+
+    def _persist_image(self, result: Any, account: str, prompt: str) -> tuple[str, str]:
+        """Persist provider bytes as PNG using the host upload metadata contract."""
+        max_bytes = 50 * 1024 * 1024
+        if result.b64_json:
+            if len(result.b64_json) > (max_bytes * 4 // 3 + 4):
+                raise ValueError("generated image exceeds storage size limit")
+            raw = base64.b64decode(result.b64_json, validate=True)
+        elif result.url:
+            if urlparse(result.url).scheme != "https":
+                raise ValueError("provider image download requires an HTTPS URL")
+            with urlopen(result.url, timeout=30) as download:
+                raw = download.read(max_bytes + 1)
+        else:
+            raise ValueError("image model returned an empty image")
+        if len(raw) > max_bytes:
+            raise ValueError("generated image exceeds storage size limit")
+        with Image.open(io.BytesIO(raw)) as source:
+            source.load()
+            image = source.convert("RGBA" if "A" in source.getbands() or "transparency" in source.info else "RGB")
+            output = io.BytesIO()
+            image.save(output, format="PNG")
+        png = output.getvalue()
+        image_id = str(uuid.uuid4())
+        storage = Path(self._storage_resolver.storage_base_dir())
+        directory = self._contained_path(storage, "images", account)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = self._contained_path(directory, f"{image_id}.png")
+        metadata_path = self._contained_path(directory, f"{image_id}.json")
+        metadata = {"id": image_id, "account": account,
+                    "original_filename": f"generated-{image_id}.png",
+                    "mime_type": "image/png", "size_bytes": len(png),
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                    "source": "image_generate", "prompt": prompt}
+        try:
+            with path.open("xb") as handle:
+                handle.write(png)
+            with metadata_path.open("x", encoding="utf-8") as handle:
+                json.dump(metadata, handle, ensure_ascii=False)
+        except Exception:
+            path.unlink(missing_ok=True)
+            metadata_path.unlink(missing_ok=True)
+            raise
+        logger.info("image_generate: saved image_id=%s account=%s size_bytes=%d", image_id, account, len(png))
+        return image_id, f"images/{account}/{image_id}.png"
 
     def execute(self, args: dict, *, account_name: str = "auto", **context: Any) -> dict:
         try:
@@ -94,13 +150,12 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
             if not response.images:
                 raise ValueError("image model returned no images")
             result = response.images[0]
-            url = result.url
-            if result.b64_json:
-                url = f"data:{result.mime_type};base64,{result.b64_json}"
-            if not url:
-                raise ValueError("image model returned an empty image")
+            image_id, path = self._persist_image(result, account, prompt)
+            download_url = f"/download/image/{image_id}?accountName={quote(account, safe='')}"
             return {"ok": True, "tool": self.NAME, "model": response.model or model,
-                    "image": {"url": url, "alt": prompt}}
+                    "image_id": image_id, "path": path, "mime_type": "image/png",
+                    "download_url": download_url,
+                    "image": {"url": download_url, "alt": prompt}}
         except Exception as exc:
             logger.exception("image_generate failed")
             return {"ok": False, "tool": self.NAME, "error": str(exc)}

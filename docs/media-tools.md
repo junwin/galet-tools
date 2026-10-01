@@ -29,10 +29,18 @@ upload metadata. Cross-account images and paths escaping storage are rejected
 before the model call. Earlier turns use `role`, `text`, and `image_ids` fields.
 Unrelated execution context or chat history is never sent automatically.
 
-The successful result contains `image.url` and `image.alt` for the existing
-inline-image UI. The handler requests one image, preserves its MIME type, and
-reports failure if the provider returns no usable image. Outputs are inline;
-for a subsequent edit, upload the generated image and use its UUID.
+The handler saves the full-resolution output as `images/{account}/{uuid}.png`
+with the same JSON metadata contract as host uploads. PNG conversion preserves
+alpha. Provider base64 stays inside the handler; HTTPS provider URLs are downloaded
+before saving. Invalid image data and failed downloads return an error.
+
+The successful result contains only `image_id`, `path`, `mime_type`, `download_url`,
+and `image.url`/`image.alt` plus status/model fields. There is no image payload in
+the tool result. The existing SSE image event carries the download URL; Lucy's
+`/download/image/{uuid}?accountName=...` endpoint serves the file under the same
+API-key guard as the video endpoint. The UI downloads it with the configured API
+key and displays a browser blob URL, including after chat-history reload. For a
+subsequent edit, pass the returned UUID directly without uploading it again.
 
 Both AI image and video tools are available in the generic registry and the
 standalone MCP server. Include their names explicitly in the MCP allowlist;
@@ -42,5 +50,6 @@ Lucy registers a thin `image_generate` configuration adapter. Its existing
 video and SVG adapters remain in place. Chat agents already allowed to use
 `generate_image` gain `image_generate`; the Lucy MCP agent's allowlist is unchanged.
 
-Release order: publish Galet 0.1.20, then Galet-tools 0.1.17, then install Lucy's
-updated pinned requirements. The new packages are not published by these PRs.
+Publish the updated Galet-tools package before installing the matching release
+in Lucy. Update Lucy's pinned requirement to the version actually published, and
+deploy the UI image-download changes. Galet's image API requires no change here.
