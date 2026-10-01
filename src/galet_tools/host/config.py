@@ -19,7 +19,6 @@ REGISTERED_TOOL_NAMES = (
     "file_load",
     "file_save",
     "patch_apply",
-    "execute_command",
     "execute_command2",
     "generate_svg",
     "repo_index",

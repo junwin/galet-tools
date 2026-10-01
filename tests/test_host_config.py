@@ -116,6 +116,7 @@ class TestAllowlistFailClosed:
             ("file_load", "must be a list of tool name strings"),
             ([1, 2], "must be a list of tool name strings"),
             (["file_load", "bogus_tool"], "contains unknown tool names"),
+            (["execute_command"], "contains unknown tool names"),
             ([], "must not be empty"),
             (["   "], "must not be empty"),
         ],

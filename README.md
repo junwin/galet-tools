@@ -156,8 +156,8 @@ null, blank, or (for the two path keys) relative value fails validation.
 Optional keys left out or set to null fall back to their defaults:
 
 - `allowlist` — tools to expose; the default includes `file_load`,
-  `file_save`, `patch_apply`, legacy `execute_command`, structured
-  `execute_command2`, `generate_svg`, `repo_index`, `repo_search`,
+  `file_save`, `patch_apply`, structured `execute_command2`, `generate_svg`,
+  `repo_index`, `repo_search`,
   `image_generate`, and `video_generate`.
 - `external_roots` — named external roots the tools may access; default
   none.
@@ -173,7 +173,8 @@ endpoint is `http://127.0.0.1:8765/mcp`.
 The default allowlist exposes every generic tool registered by galet-tools.
 Image and video generation still need their corresponding provider support
 installed and configured; repository indexing and search work on local folders
-and configured external roots.
+and configured external roots. MCP exposes only the structured `execute_command2`
+variant; the legacy `execute_command` remains available to direct registry users.
 
 ### Test interactively with MCP Inspector
 

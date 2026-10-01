@@ -95,6 +95,8 @@ def test_scope_tool_names_match_advertised_tools(tmp_path):
     assert mcp_tools
     assert set(scope.tool_names) == {tool["name"] for tool in mcp_tools}
     assert set(scope.handlers) == set(REGISTERED_TOOL_NAMES)
+    assert "execute_command2" in scope.tool_names
+    assert "execute_command" not in scope.tool_names
     for tool in mcp_tools:
         assert set(tool) == {"name", "description", "inputSchema"}
 
