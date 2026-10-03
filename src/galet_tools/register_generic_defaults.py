@@ -11,6 +11,8 @@ from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
 from galet_tools.tools.repo_index_handler import RepoIndexHandler
 from galet_tools.tools.repo_search_handler import RepoSearchHandler
 from galet_tools.tools.video_generate_handler import VideoGenerateHandler
+from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
+from galet_tools.tools.procedural_memory_handler import ProceduralMemoryHandler
 
 
 def register_generic_defaults(reg: HandlerRegistry) -> None:
@@ -25,3 +27,6 @@ def register_generic_defaults(reg: HandlerRegistry) -> None:
     reg.register(GenerateSvgHandler)
     reg.register(ImageGenerateHandler)
     reg.register(VideoGenerateHandler)
+    # Memory backends are supplied by execute context or an explicit host factory.
+    reg.register(EpisodicMemoryHandler, factory=lambda config: EpisodicMemoryHandler())
+    reg.register(ProceduralMemoryHandler, factory=lambda config: ProceduralMemoryHandler())

@@ -105,7 +105,7 @@ def _run_list(url: str, timeout: float, as_json: bool) -> int:
         return _EXIT_CONNECT
     tools.sort(key=lambda tool: tool.name)
     if as_json:
-        payload = [tool.model_dump(mode="json") for tool in tools]
+        payload = [tool.model_dump(mode="json", by_alias=True) for tool in tools]
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print(f"{len(tools)} tools")
@@ -125,7 +125,7 @@ def _run_call(url: str, timeout: float, name: str, arguments: Dict[str, Any]) ->
         return _EXIT_CONNECT
     text_parts = [part.text for part in result.content if part.type == "text"]
     print("".join(text_parts).strip())
-    return _EXIT_TOOL_ERROR if result.isError else _EXIT_OK
+    return _EXIT_TOOL_ERROR if result.is_error else _EXIT_OK
 
 
 def main(argv: Optional[List[str]] = None) -> int:

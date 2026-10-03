@@ -9,6 +9,8 @@ from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
 
 EXPECTED_NAMES = [
+    "episodic_memory",
+    "procedural_memory",
     "execute_command",
     "execute_command2",
     "file_load",

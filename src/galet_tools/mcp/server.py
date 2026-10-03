@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from galet_tools.framework.handler_registry import HandlerRegistry
@@ -46,6 +47,11 @@ class McpScope:
     handlers: Dict[str, Any]
     tool_names: frozenset
 
+    def close(self) -> None:
+        handler = self.handlers.get("episodic_memory")
+        if handler is not None:
+            handler.memory.close()
+
 
 def build_registry() -> HandlerRegistry:
     registry = HandlerRegistry()
@@ -57,7 +63,7 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
     storage = ConfigStorageLocationResolver(config)
     sandbox = ConfigSandboxRootResolver(config)
     security = DefaultSecurityPolicy()
-    return {
+    handlers = {
         "file_load": FileLoadHandler2(storage),
         "file_save": FileSaveHandler2(storage),
         "patch_apply": PatchApplyHandler2(storage),
@@ -67,6 +73,37 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "image_generate": ImageGenerateHandler(storage),
         "video_generate": VideoGenerateHandler(storage),
     }
+    memory_tools = set(config.allowlist) & {"procedural_memory", "episodic_memory"}
+    if memory_tools:
+        try:
+            from galet_memory import FileProceduralMemory, ProceduralLayout, SqliteEpisodicMemory
+        except ImportError as exc:
+            raise GaletMcpError("memory tools require galet-tools[memory] (galet-memory>=0.1.23)") from exc
+        base = Path(storage.storage_base_dir())
+        if "procedural_memory" in memory_tools:
+            from galet_tools.tools.procedural_memory_handler import ProceduralMemoryHandler
+            options = config.procedural_memory
+            layout = {
+                "global_contexts": "contexts", "account_contexts": "contexts/{account}",
+                "project_contexts": None,
+                "global_skills": "skills", "account_skills": "skills/{account}",
+                "project_skills": None,
+                **options.get("layout", {}),
+            }
+            handlers["procedural_memory"] = ProceduralMemoryHandler(FileProceduralMemory(
+                options.get("root") or base, ProceduralLayout(**layout),
+                context_resolution=options.get("context_resolution", "most_specific"),
+            ))
+        if "episodic_memory" in memory_tools:
+            from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
+            if not callable(getattr(SqliteEpisodicMemory, "invalidate_events", None)):
+                raise GaletMcpError("episodic_memory requires galet-memory>=0.1.23 with invalidate_events")
+            path = Path(config.episodic_memory_db_path or base / "chat2.sqlite")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handlers["episodic_memory"] = EpisodicMemoryHandler(SqliteEpisodicMemory(
+                path, digests_root=base / "digests",
+            ))
+    return handlers
 
 
 def exposed_tools(
@@ -110,6 +147,10 @@ def dispatch_call(
         return error_result(
             f"Tool '{name}' is advertised but not available in this server process."
         )
+    if name in ("procedural_memory", "episodic_memory"):
+        requested_account = (arguments or {}).get("account_name")
+        if requested_account and str(requested_account).strip() != scope.config.account:
+            return error_result("account_name does not match the fixed MCP account")
     try:
         result = handler.execute(
             arguments or {}, account_name=scope.config.account
@@ -140,6 +181,7 @@ def serve(config_path: Optional[str] = None) -> None:
 
         import uvicorn
     except ImportError as exc:
+        scope.close()
         raise GaletMcpError(
             "the official MCP Python SDK (mcp 2.x with its HTTP extras) and "
             "uvicorn are not installed. Install the pinned mcp dependency "
@@ -199,7 +241,10 @@ def serve(config_path: Optional[str] = None) -> None:
         config.port,
         config.account,
     )
-    uvicorn.run(app, host=config.host, port=config.port, log_level="info")
+    try:
+        uvicorn.run(app, host=config.host, port=config.port, log_level="info")
+    finally:
+        scope.close()
 
 
 def main(argv: Optional[List[str]] = None) -> int:
