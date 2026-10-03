@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from galet_memory import (
-    EpisodicEvent,
-    EpisodicMemoryManager,
-    EpisodicMemoryRequest,
-    EpisodicSessionQuery,
-)
+if TYPE_CHECKING:
+    from galet_memory import EpisodicEvent, EpisodicMemoryManager
 from galet_tools.framework.handler_v2 import HandlerV2
 
 
@@ -32,7 +28,7 @@ class EpisodicMemoryHandler(HandlerV2):
             "name": cls.NAME,
             "description": (
                 "Recall and inspect episodic chat memory through the CoALA memory layer. "
-                "Supports recall, get_session, list_sessions and append_event."
+                "Supports session reads/writes and invalidate_events by correlation_id, hiding the request and linked responses."
             ),
             "parameters": {
                 "type": "object",
@@ -42,6 +38,7 @@ class EpisodicMemoryHandler(HandlerV2):
                         "enum": [
                             "recall", "get_session", "list_sessions", "append_event",
                             "create_session", "update_session", "reset_session", "delete_session", "delete_sessions",
+                            "invalidate_events",
                         ],
                     },
                     "session_id": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
@@ -51,13 +48,19 @@ class EpisodicMemoryHandler(HandlerV2):
                     "limit": {"type": "integer", "default": 20},
                     "max_events": {"type": "integer", "default": 6},
                     "include_events": {"type": "boolean", "default": True},
+                    "event_scope": {"type": "string", "enum": ["active", "all", "archived"], "default": "active"},
+                    "correlation_id": {"type": "string", "default": "",
+                                       "description": "Required for invalidate_events: correlation of the request and its linked responses."},
+                    "expected_last_event_id": {"anyOf": [{"type": "string"}, {"type": "null"}],
+                                               "default": None, "description": "Optional guard using session.last_event_id; null means no guard."},
                     "role": {"type": "string", "default": "user"},
                     "kind": {"type": "string", "default": ""},
                     "content": {"type": "string", "default": ""},
                 },
                 "required": [
                     "action", "session_id", "account_name", "agent_name", "query",
-                    "limit", "max_events", "include_events", "role", "kind", "content"
+                    "limit", "max_events", "include_events", "role", "kind", "content",
+                    "event_scope", "correlation_id", "expected_last_event_id"
                 ],
                 "additionalProperties": False,
             },
@@ -75,6 +78,10 @@ class EpisodicMemoryHandler(HandlerV2):
                 "session": {"type": "object"},
                 "sessions": {"type": "array", "items": {"type": "object"}},
                 "events": {"type": "array", "items": {"type": "object"}},
+                "status": {"type": "string"},
+                "event_ids": {"type": "array", "items": {"type": "string"}},
+                "event_count": {"type": "integer"},
+                "invalidated_digest_ids": {"type": "array", "items": {"type": "string"}},
                 "error": {"type": "string"},
             },
             "required": ["ok", "tool", "action"],
@@ -92,6 +99,42 @@ class EpisodicMemoryHandler(HandlerV2):
         session_id = raw_session_id.strip() if isinstance(raw_session_id, str) else ""
 
         try:
+            from galet_memory import EpisodicEvent, EpisodicMemoryRequest, EpisodicSessionQuery
+
+            if not resolved_account or resolved_account == "auto":
+                return self._error(action, "account_name is required")
+            if account_name not in ("", "auto", None) and resolved_account != account_name:
+                return self._error(action, "account_name does not match the execution account")
+            # The tool does not expose another account's session or mutate it.
+            if session_id and action not in ("create_session", "list_sessions"):
+                owned = memory.get_session(session_id, include_events=False)
+                if owned is None or owned.account_name != resolved_account:
+                    return self._error(action, "Session not found for account")
+
+            if action == "invalidate_events":
+                if not session_id:
+                    return self._error(action, "session_id is required")
+                correlation_id = str(args.get("correlation_id") or "").strip()
+                if not correlation_id:
+                    return self._error(action, "correlation_id is required")
+                expected_tail = args.get("expected_last_event_id")
+                if expected_tail is not None and not isinstance(expected_tail, str):
+                    return self._error(action, "expected_last_event_id must be a string or null")
+                result = memory.invalidate_events(
+                    account_name=resolved_account, session_id=session_id,
+                    correlation_id=correlation_id,
+                    expected_last_event_id=expected_tail or None,
+                )
+                return {
+                    "ok": True, "tool": self.NAME, "action": action,
+                    "session_id": result.session_id, "correlation_id": result.correlation_id,
+                    "status": result.status, "event_ids": list(result.event_ids),
+                    "event_count": result.event_count,
+                    "invalidated_digest_ids": list(result.invalidated_digest_ids),
+                    "marker_event_id": result.marker_event_id,
+                    "unprovenanced_digests_invalidated": result.unprovenanced_digests_invalidated,
+                }
+
             if action == "recall":
                 if not session_id:
                     return self._error(action, "session_id is required")
@@ -129,9 +172,13 @@ class EpisodicMemoryHandler(HandlerV2):
             if action == "get_session":
                 if not session_id:
                     return self._error(action, "session_id is required")
+                event_scope = str(args.get("event_scope") or "active")
+                if event_scope not in ("active", "all", "archived"):
+                    return self._error(action, "event_scope must be active, all or archived")
                 session = memory.get_session(
                     session_id,
                     include_events=bool(args.get("include_events", True)),
+                    event_scope=event_scope,
                 )
                 if session is None:
                     return self._error(action, f"Session not found: {session_id}")
@@ -245,6 +292,10 @@ class EpisodicMemoryHandler(HandlerV2):
                 if len(ids) > 100:
                     return self._error(action, "at most 100 session IDs per request")
                 selected = list(dict.fromkeys(sid.strip() for sid in ids))
+                for sid in selected:
+                    owned = memory.get_session(sid, include_events=False)
+                    if owned is not None and owned.account_name != resolved_account:
+                        return self._error(action, "Session not found for account")
                 deleted = memory.delete_sessions(selected)
                 return {
                     "ok": True, "tool": self.NAME, "action": action,
@@ -277,6 +328,7 @@ class EpisodicMemoryHandler(HandlerV2):
             "updated_at": session.updated_at.isoformat() if session.updated_at else None,
             "tags": list(session.tags),
             "metadata": dict(session.metadata),
+            "last_event_id": session.last_event_id,
             "events": [cls._event_dict(event) for event in session.events],
         }
 

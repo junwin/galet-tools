@@ -94,7 +94,7 @@ def main() -> None:
             embeddings = ExampleEmbeddings()
             index = ExampleIndex()
             semantic = SemanticMemoryHandler(VectorSemanticMemory(
-                embeddings=embeddings, index=index, text_loader=FileTextLoader(),
+                embeddings=embeddings, index=index, text_loader=FileTextLoader(), episodic_store=store,
             ))
             recall_args = {
                 "action": "recall", "query": "What happened in this chat?",

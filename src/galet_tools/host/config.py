@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -27,6 +27,7 @@ REGISTERED_TOOL_NAMES = (
 DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
 # Provider-backed media tools are available when explicitly allowed.
 REGISTERED_TOOL_NAMES += ("image_generate", "video_generate")
+REGISTERED_TOOL_NAMES += ("procedural_memory", "episodic_memory")
 
 
 class GaletConfigError(Exception):
@@ -46,6 +47,8 @@ class GaletConfig:
     host: str
     port: int
     fonts: list[str]
+    episodic_memory_db_path: Optional[str] = None
+    procedural_memory: dict[str, Any] = field(default_factory=dict)
 
 
 def load_config(path: Optional[Union[str, os.PathLike]] = None) -> GaletConfig:
@@ -155,6 +158,33 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         fail("key 'fonts' must be a list of font file path strings")
     fonts = [os.path.expanduser(x.strip()) for x in fonts_raw if x.strip()]
 
+    episodic_path = raw.get("episodic_memory_db_path")
+    if episodic_path is not None:
+        episodic_path = abs_path(episodic_path, "episodic_memory_db_path")
+    procedural = raw.get("procedural_memory")
+    if procedural is None:
+        procedural = {}
+    if not isinstance(procedural, dict):
+        fail("key 'procedural_memory' must be an object")
+    procedural = dict(procedural)
+    unknown = set(procedural) - {"root", "layout", "context_resolution"}
+    if unknown:
+        fail(f"unknown procedural_memory options: {sorted(unknown)}")
+    if procedural.get("root") is not None:
+        procedural["root"] = abs_path(procedural["root"], "procedural_memory.root")
+    resolution = procedural.get("context_resolution", "most_specific")
+    if resolution not in ("merge", "most_specific"):
+        fail("procedural_memory.context_resolution must be 'merge' or 'most_specific'")
+    layout = procedural.get("layout", {})
+    if not isinstance(layout, dict):
+        fail("procedural_memory.layout must be an object")
+    layout_keys = {f"{scope}_{kind}" for scope in ("global", "account", "project")
+                   for kind in ("contexts", "skills")}
+    if set(layout) - layout_keys:
+        fail("procedural_memory.layout contains unknown keys")
+    if any(value is not None and not isinstance(value, str) for value in layout.values()):
+        fail("procedural_memory.layout paths must be strings or null")
+
     return GaletConfig(
         account=account,
         allowlist=allowlist,
@@ -165,4 +195,6 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         host=host,
         port=port,
         fonts=fonts,
+        episodic_memory_db_path=episodic_path,
+        procedural_memory=procedural,
     )

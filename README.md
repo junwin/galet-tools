@@ -102,9 +102,14 @@ tool set.
 The `episodic_memory` handler takes an injected episodic store, and
 `curate_chat` takes an injected curation service, and `reset_session` takes
 the same episodic store. `semantic_memory` takes an injected
-`galet_memory.semantic.SemanticMemory`. These tools are intentionally
-not registered as a generic MCP default because the host must supply the
-episodic store, digest generator, and trusted account.
+`galet_memory.semantic.SemanticMemory`. `procedural_memory` exposes context/skill
+recall and scoped context/skill edits. The episodic and procedural tools are
+registered in the generic registry, with backends supplied by the host; MCP
+constructs them when explicitly allowlisted. Curation/reset/semantic tools still
+require application services and are not exposed by the generic MCP server.
+
+See [memory tools](docs/memory-tools.md) for procedural operations, correlation
+invalidation, configuration pointing at Lucy storage, and Inspector/smoke tests.
 
 Run a small SQLite session through creation, event append and read, digest
 preview, archive, an active-session read, and an idempotent
@@ -118,8 +123,7 @@ python -m pip install -e '.[memory]'
 python examples/curate_chat.py
 ```
 
-If galet-memory 0.1.5 is only available from a sibling checkout, install
-that checkout first with `python -m pip install -e ../galet-memory`.
+The memory extra requires galet-memory 0.1.23 or later.
 
 The example uses a deterministic digest generator and runs all four tool adapters
 with one temporary session. The example explicitly writes the digest text,
@@ -163,6 +167,10 @@ Optional keys left out or set to null fall back to their defaults:
 - `host` — default `127.0.0.1`; loopback only.
 - `port` — default `8765`.
 - `fonts` — font paths for the generators; default none.
+- `episodic_memory_db_path` — optional absolute relational SQLite path; defaults
+  to `<storage_root>/<storage_namespace>/chat2.sqlite` when episodic tools are allowed.
+- `procedural_memory` — optional root/layout/context-resolution overrides. See
+  [memory configuration](docs/memory-tools.md#mcp-configuration).
 
 ### What it exposes
 
@@ -224,3 +232,4 @@ address. Remote access needs a separate reverse-proxy design.
 ## License
 
 MIT — see `LICENSE`.
+

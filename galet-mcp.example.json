@@ -6,7 +6,9 @@
     "patch_apply",
     "execute_command",
     "execute_command2",
-    "generate_svg"
+    "generate_svg",
+    "procedural_memory",
+    "episodic_memory"
   ],
   "storage_root": "/home/junwin/lucy_storage",
   "storage_namespace": "galet",
@@ -21,5 +23,10 @@
   "port": 8700,
   "fonts": [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-  ]
+  ],
+  "episodic_memory_db_path": "/home/junwin/lucy_storage/data/chat2.sqlite",
+  "procedural_memory": {
+    "root": "/home/junwin/lucy_storage/data",
+    "context_resolution": "most_specific"
+  }
 }
