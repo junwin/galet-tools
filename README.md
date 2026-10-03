@@ -38,6 +38,19 @@ python -m venv .venv
 .venv/bin/pip install -e .
 ```
 
+### Update the project and all dependencies
+
+From the `galet-tools` directory, with your virtual environment active, run:
+
+```bash
+python -m pip install --upgrade --upgrade-strategy eager -e '.[memory,mcp,video]'
+```
+
+This installs your local `galet-tools` in editable mode and upgrades its
+runtime dependencies, including `galet-memory` and `galet`, to the newest
+versions allowed by `pyproject.toml`. It includes the memory, MCP, and video
+extras; exact version pins remain in effect.
+
 Run the suite:
 
 ```bash
