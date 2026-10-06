@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from galet_memory import EpisodicEvent, SqliteEpisodicMemory
+from galet_memory import NewEvent, SqliteEpisodicMemory
 from galet_tools.host.config import GaletConfig, GaletConfigError, load_config
 from galet_tools.mcp.server import GaletMcpError, dispatch_call, resolve_startup_scope
 
@@ -27,16 +27,18 @@ def test_memory_tools_are_listed_and_callable_with_configured_roots(tmp_path):
     path = tmp_path / 'lucy-data/chat2.sqlite'
     path.parent.mkdir()
     with SqliteEpisodicMemory(path) as memory:
-        memory.create_session(account_name='acct', agent_name='lucy', session_id='s')
-        for event in memory.add_events('s', [EpisodicEvent('user', 'Request'), EpisodicEvent('assistant', 'Response')]):
-            memory.link_event('c', 's', event.event_id)
+        memory.create_session(account_name='acct', session_id='s')
+        memory.append_events(account_name='acct', session_id='s', events=[
+            NewEvent('user', 'Request', 'acct', correlation_ids=('c',)),
+            NewEvent('assistant', 'Response', 'lucy', correlation_ids=('c',)),
+        ])
     settings = config(tmp_path, episodic_memory_db_path=str(path),
                       procedural_memory={'root': str(tmp_path / 'procedural')})
     scope, definitions = resolve_startup_scope(settings)
     try:
         assert {tool['name'] for tool in definitions} == {'procedural_memory', 'episodic_memory'}
         episodic_schema = next(tool['inputSchema'] for tool in definitions if tool['name'] == 'episodic_memory')
-        assert 'invalidate_events' in episodic_schema['properties']['action']['enum']
+        assert 'invalidate_exchange' in episodic_schema['properties']['action']['enum']
         assert payload(scope, 'procedural_memory', {'action': 'save_skill', 'scope': 'global',
             'skill_name': 'review', 'text': 'Inspect it'})['ok']
         assert payload(scope, 'procedural_memory', {'action': 'save_context', 'scope': 'global',
@@ -49,17 +51,17 @@ def test_memory_tools_are_listed_and_callable_with_configured_roots(tmp_path):
         assert recalled['memory']['text'] == 'Account'
         assert recalled['memory']['skills'][0]['text'] == 'Inspect it'
         assert (tmp_path / 'procedural/contexts/acct/dev.md').is_file()
-        before = payload(scope, 'episodic_memory', {'action': 'get_session', 'session_id': 's'})
-        assert len(before['session']['events']) == 2
-        invalidated = payload(scope, 'episodic_memory', {'action': 'invalidate_events', 'session_id': 's',
-            'correlation_id': 'c', 'expected_last_event_id': before['session']['last_event_id']})
+        before = payload(scope, 'episodic_memory', {'action': 'get_recent_events', 'session_id': 's'})
+        assert len(before['events']) == 2
+        invalidated = payload(scope, 'episodic_memory', {'action': 'invalidate_exchange', 'session_id': 's',
+            'correlation_id': 'c', 'expected_last_event_id': before['last_event_id']})
         assert invalidated['status'] == 'invalidated' and invalidated['event_count'] == 2
-        assert payload(scope, 'episodic_memory', {'action': 'get_session', 'session_id': 's'})['session']['events'] == []
+        assert payload(scope, 'episodic_memory', {'action': 'get_recent_events', 'session_id': 's'})['events'] == []
     finally:
         scope.close()
     with SqliteEpisodicMemory(path) as memory:
-        assert memory.get_session('s').events == []
-        assert len(memory.get_session('s', event_scope='raw').events) == 3
+        assert memory.get_recent_events(account_name='acct', session_id='s').events == ()
+        assert len(memory.get_audit_snapshot(account_name='acct', session_id='s').events) == 3
 
 
 @pytest.mark.parametrize('name', ['procedural_memory', 'episodic_memory'])

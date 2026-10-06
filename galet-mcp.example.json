@@ -24,7 +24,7 @@
   "fonts": [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
   ],
-  "episodic_memory_db_path": "/home/junwin/lucy_storage/data/chat2.sqlite",
+  "episodic_memory_db_path": "/home/junwin/lucy_storage/data/episodic-v2.sqlite",
   "procedural_memory": {
     "root": "/home/junwin/lucy_storage/data",
     "context_resolution": "most_specific"

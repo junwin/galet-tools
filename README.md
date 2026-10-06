@@ -114,7 +114,7 @@ tool set.
 
 The `episodic_memory` handler takes an injected episodic store, and
 `curate_chat` takes an injected curation service, and `reset_session` takes
-the same episodic store. `semantic_memory` takes an injected
+the same curation service. `semantic_memory` takes an injected
 `galet_memory.semantic.SemanticMemory`. `procedural_memory` exposes context/skill
 recall and scoped context/skill edits. The episodic and procedural tools are
 registered in the generic registry, with backends supplied by the host; MCP
@@ -126,7 +126,7 @@ invalidation, configuration pointing at Lucy storage, and Inspector/smoke tests.
 
 Run a small SQLite session through creation, event append and read, digest
 preview, archive, an active-session read, and an idempotent
-archive retry, and a reset that clears events while retaining the session
+archive retry, and a context reset that retains history and session
 metadata. It then writes and indexes the archived digest and recalls it
 through `VectorSemanticMemory` in the `digests` namespace, using deterministic
 embedding and index ports without an API key:
@@ -136,7 +136,9 @@ python -m pip install -e '.[memory]'
 python examples/curate_chat.py
 ```
 
-The memory extra requires galet-memory 0.1.23 or later.
+The memory extra pins galet-memory PR #33’s merge commit until the coordinated
+release. This is a breaking episodic API/storage change; use fresh storage.
+Lucy and galet-prompt-builder still require consumer updates before deployment.
 
 The example uses a deterministic digest generator and runs all four tool adapters
 with one temporary session. The example explicitly writes the digest text,
