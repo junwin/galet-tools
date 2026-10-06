@@ -73,7 +73,7 @@ def main() -> None:
         with SqliteEpisodicMemory(str(Path(directory) / "sessions.sqlite")) as store:
             episodic = EpisodicMemoryHandler(store)
             created = episodic.execute(
-                {"action": "create_session", "agent_name": "demo",
+                {"action": "create_session",
                  "friendly_name": "curation demo"},
                 account_name="example",
             )
@@ -82,15 +82,15 @@ def main() -> None:
             for role, text in (("user", "Hello."), ("assistant", "Welcome.")):
                 added = episodic.execute(
                     {"action": "append_event", "session_id": session_id,
-                     "role": role, "kind": "message", "content": text},
+                     "event": {"role": role, "actor": "example" if role == "user" else "demo", "content": text}},
                     account_name="example",
                 )
                 assert added["ok"], added
             before = episodic.execute(
-                {"action": "get_session", "session_id": session_id},
+                {"action": "get_recent_events", "session_id": session_id},
                 account_name="example",
             )
-            assert before["ok"] and len(before["session"]["events"]) == 2, before
+            assert before["ok"] and len(before["events"]) == 2, before
             embeddings = ExampleEmbeddings()
             index = ExampleIndex()
             semantic = SemanticMemoryHandler(VectorSemanticMemory(
@@ -112,7 +112,7 @@ def main() -> None:
             base = {"session_id": session_id, "max_chars": 32000, "idempotency_key": "", "publish": False}
             digest = handler.execute({**base, "mode": "digest"}, account_name="example")
             assert digest["ok"] and digest["status"] == "preview", digest
-            assert len(store.get_session(session_id, include_events=True).events) == 2
+            assert len(store.get_transcript_snapshot(account_name="example", session_id=session_id).events) == 2
             archived = handler.execute(
                 {**base, "mode": "archive", "idempotency_key": "example-operation", "publish": True},
                 account_name="example",
@@ -125,26 +125,27 @@ def main() -> None:
             )
             assert retry["boundary_event_id"] == archived["boundary_event_id"], retry
             assert len(index.records) == 1
-            active = store.get_session(
-                session_id, include_events=True, event_scope="active"
-            )
+            active = store.get_active_snapshot(account_name="example", session_id=session_id)
             assert active is not None and len(active.events) == 1
             after = episodic.execute(
-                {"action": "get_session", "session_id": session_id},
+                {"action": "get_recent_events", "session_id": session_id},
                 account_name="example",
             )
-            assert after["ok"] and len(after["session"]["events"]) == 1, after
-            assert after["session"]["events"][0]["kind"] == "session_digest", after
-            reset = ResetSessionHandler(store).execute(
+            assert after["ok"] and after["events"] == [], after
+            stored_digests = episodic.execute(
+                {"action": "list_digests", "session_id": session_id}, account_name="example"
+            )
+            assert stored_digests["ok"] and len(stored_digests["digests"]) == 1, stored_digests
+            reset = ResetSessionHandler(handler.curation).execute(
                 {}, account_name="example", conversation_id=session_id
             )
             assert reset == {"action": "reset_session", "ok": True}, reset
             cleared = episodic.execute(
-                {"action": "get_session", "session_id": session_id},
+                {"action": "get_recent_events", "session_id": session_id},
                 account_name="example",
             )
-            assert cleared["ok"] and cleared["session"]["events"] == [], cleared
-            assert cleared["session"]["friendly_name"] == "curation demo", cleared
+            assert cleared["ok"] and cleared["events"] == [], cleared
+            assert store.get_session(account_name="example", session_id=session_id).friendly_name == "curation demo"
             recalled = semantic.execute(recall_args, account_name="example")
             assert recalled["ok"] and recalled["count"] == 1, recalled
             assert recalled["documents"][0]["source_id"] == session_id, recalled

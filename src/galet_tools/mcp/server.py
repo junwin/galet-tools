@@ -78,7 +78,7 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         try:
             from galet_memory import FileProceduralMemory, ProceduralLayout, SqliteEpisodicMemory
         except ImportError as exc:
-            raise GaletMcpError("memory tools require galet-tools[memory] (galet-memory>=0.1.23)") from exc
+            raise GaletMcpError("memory tools require galet-tools[memory] with the explicit episodic interfaces") from exc
         base = Path(storage.storage_base_dir())
         if "procedural_memory" in memory_tools:
             from galet_tools.tools.procedural_memory_handler import ProceduralMemoryHandler
@@ -96,8 +96,8 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
             ))
         if "episodic_memory" in memory_tools:
             from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
-            if not callable(getattr(SqliteEpisodicMemory, "invalidate_events", None)):
-                raise GaletMcpError("episodic_memory requires galet-memory>=0.1.23 with invalidate_events")
+            if not callable(getattr(SqliteEpisodicMemory, "invalidate_exchange", None)):
+                raise GaletMcpError("episodic_memory requires galet-memory PR #33 explicit interfaces; install the pinned memory extra")
             path = Path(config.episodic_memory_db_path or base / "chat2.sqlite")
             path.parent.mkdir(parents=True, exist_ok=True)
             handlers["episodic_memory"] = EpisodicMemoryHandler(SqliteEpisodicMemory(

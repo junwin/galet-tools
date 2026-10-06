@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 class ResettableEpisodicStore(Protocol):
-    def reset_session(self, session_id: str) -> Any: ...
+    def reset_context(self, *, account_name: str, session_id: str) -> Any: ...
 
 
 class ResetSessionHandler(HandlerV2):
-    """Clear session events using the host's current conversation ID.
+    """Reset active context using the host's current conversation ID.
 
     The action result is retained for Lucy's streaming client notification.
     """
@@ -65,17 +65,19 @@ class ResetSessionHandler(HandlerV2):
         self, args: Dict[str, Any], *, account_name: str = "auto", **context: Any
     ) -> Dict[str, Any]:
         conversation_id = context.get("conversation_id")
-        store = context.get("episodic_store") or self.memory
+        store = context.get("curation_service") or self.memory
         if not isinstance(conversation_id, str) or not conversation_id.strip():
             return {"action": self.NAME, "ok": False, "error": "No session ID available"}
         if store is None:
-            return {"action": self.NAME, "ok": False, "error": "episodic_store not available"}
+            return {"action": self.NAME, "ok": False, "error": "curation_service not available"}
         try:
-            store.reset_session(conversation_id)
+            if account_name in ("", "auto", None):
+                raise ValueError("account_name is required")
+            store.reset_context(account_name=account_name, session_id=conversation_id)
         except Exception as exc:
             logger.exception("reset_session: failed for session=%s", conversation_id)
             return {"action": self.NAME, "ok": False, "error": str(exc)}
-        logger.info("reset_session: cleared events for session=%s account=%s", conversation_id, account_name)
+        logger.info("reset_session: reset context for session=%s account=%s", conversation_id, account_name)
         return {"action": self.NAME, "ok": True}
 
     def execute_raw(

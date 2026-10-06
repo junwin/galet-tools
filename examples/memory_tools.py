@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from galet_memory import EpisodicEvent, FileProceduralMemory, SqliteEpisodicMemory
+from galet_memory import NewEvent, FileProceduralMemory, SqliteEpisodicMemory
 from galet_tools.tools.episodic_memory_handler import EpisodicMemoryHandler
 from galet_tools.tools.procedural_memory_handler import ProceduralMemoryHandler
 
@@ -32,15 +32,17 @@ def main():
         assert account_result['text'] == 'Account context'
         assert account_result['skills'][0]['text'] == 'Account review'
         with SqliteEpisodicMemory(Path(directory) / 'chat.sqlite') as memory:
-            memory.create_session(account_name='demo', agent_name='lucy', session_id='test-session')
-            for event in memory.add_events('test-session', [EpisodicEvent('user', 'Request'), EpisodicEvent('assistant', 'Response')]):
-                memory.link_event('test-correlation', 'test-session', event.event_id)
-            memory.append_event('test-session', EpisodicEvent('user', 'Keep this'))
+            memory.create_session(account_name='demo', session_id='test-session')
+            memory.append_events(account_name='demo', session_id='test-session', events=[
+                NewEvent('user', 'Request', 'demo', correlation_ids=('test-correlation',)),
+                NewEvent('assistant', 'Response', 'lucy', correlation_ids=('test-correlation',)),
+            ])
+            memory.append_event(account_name='demo', session_id='test-session', event=NewEvent('user', 'Keep this', 'demo'))
             handler = EpisodicMemoryHandler(memory)
-            args = {'action': 'invalidate_events', 'session_id': 'test-session', 'correlation_id': 'test-correlation'}
+            args = {'action': 'invalidate_exchange', 'session_id': 'test-session', 'correlation_id': 'test-correlation'}
             result = handler.execute(args, account_name='demo')
             assert result['ok'] and result['event_count'] == 2, result
-            assert [event.content for event in memory.get_session('test-session').events] == ['Keep this']
+            assert [event.content for event in memory.get_recent_events(account_name='demo', session_id='test-session').events] == ['Keep this']
             assert handler.execute(args, account_name='demo')['status'] == 'already_invalidated'
             print(json.dumps({'global_context': global_result['text'], 'account_context': account_result['text'],
                               'account_skill': account_result['skills'][0]['text'], 'invalidation': result}, indent=2))

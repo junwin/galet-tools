@@ -1,351 +1,277 @@
-"""Tool for inspecting and managing episodic sessions through galet-memory."""
-
+"""Explicit account-scoped session, event and digest tools for galet-memory."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from dataclasses import asdict, is_dataclass
+from datetime import datetime
+from typing import Any, Protocol, TYPE_CHECKING
+
+from galet_tools.framework.handler_v2 import HandlerV2
 
 if TYPE_CHECKING:
-    from galet_memory import EpisodicEvent, EpisodicMemoryManager
-from galet_tools.framework.handler_v2 import HandlerV2
+    from galet_memory import SessionStore, EventStore, DigestStore
+
+    class EpisodicStore(SessionStore, EventStore, DigestStore, Protocol):
+        pass
 
 
 class EpisodicMemoryHandler(HandlerV2):
-    """Expose episodic memory operations through a handler interface."""
-
     NAME = "episodic_memory"
+    ACTIONS = (
+        "create_session", "get_session", "list_sessions", "update_session",
+        "clear_session_events", "delete_session", "delete_sessions",
+        "append_event", "append_events", "get_event", "get_recent_events",
+        "get_events_by_period", "get_exchange", "invalidate_exchange",
+        "get_digest", "list_digests", "search_digests",
+    )
 
-    def __init__(self, memory: Optional[EpisodicMemoryManager] = None):
+    def __init__(self, memory: EpisodicStore | None = None):
         self.memory = memory
 
     @classmethod
-    def name(cls) -> str:
+    def name(cls):
         return cls.NAME
 
     @classmethod
-    def tool_def(cls) -> Dict[str, Any]:
+    def tool_def(cls):
+        strings = {"type": "array", "items": {"type": "string"}}
+        nullable = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+        event = {
+            "type": "object", "properties": {
+                "role": {"type": "string"}, "actor": {"type": "string"},
+                "kind": {"type": "string"}, "content": {},
+                "created_at": {"type": "string", "format": "date-time"},
+                "metadata": {"type": "object"}, "correlation_ids": strings,
+            }, "required": ["role", "actor", "content"], "additionalProperties": False,
+        }
+        changes = {
+            "type": "object", "properties": {
+                "friendly_name": nullable, "context_name": nullable,
+                "tags": strings, "metadata": {"type": "object"},
+            }, "additionalProperties": False,
+        }
         return {
-            "type": "function",
-            "name": cls.NAME,
+            "type": "function", "name": cls.NAME,
             "description": (
-                "Recall and inspect episodic chat memory through the CoALA memory layer. "
-                "Supports session reads/writes and invalidate_events by correlation_id, hiding the request and linked responses."
+                "Manage account-owned sessions and read complete episodic events and digests. "
+                "get_session returns metadata only. Use get_recent_events with event_kinds "
+                "['user_message'] for the last N user messages; filters apply before count. "
+                "Use get_exchange/invalidate_exchange for a request and linked responses. "
+                "Period reads use timezone-aware [start,end). Pass returned pagination fields "
+                "to continue. Updates use changes: omit unchanged fields, null clears nullable fields. "
+                "clear_session_events permanently removes events; use reset_session to reset context."
             ),
             "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": [
-                            "recall", "get_session", "list_sessions", "append_event",
-                            "create_session", "update_session", "reset_session", "delete_session", "delete_sessions",
-                            "invalidate_events",
-                        ],
-                    },
-                    "session_id": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
-                    "account_name": {"type": "string", "default": ""},
-                    "agent_name": {"type": "string", "default": ""},
-                    "query": {"type": "string", "default": ""},
-                    "limit": {"type": "integer", "default": 20},
-                    "max_events": {"type": "integer", "default": 6},
-                    "include_events": {"type": "boolean", "default": True},
-                    "event_scope": {"type": "string", "enum": ["active", "all", "archived"], "default": "active"},
-                    "correlation_id": {"type": "string", "default": "",
-                                       "description": "Required for invalidate_events: correlation of the request and its linked responses."},
-                    "expected_last_event_id": {"anyOf": [{"type": "string"}, {"type": "null"}],
-                                               "default": None, "description": "Optional guard using session.last_event_id; null means no guard."},
-                    "role": {"type": "string", "default": "user"},
-                    "kind": {"type": "string", "default": ""},
-                    "content": {"type": "string", "default": ""},
-                },
-                "required": [
-                    "action", "session_id", "account_name", "agent_name", "query",
-                    "limit", "max_events", "include_events", "role", "kind", "content",
-                    "event_scope", "correlation_id", "expected_last_event_id"
-                ],
-                "additionalProperties": False,
+                "type": "object", "properties": {
+                    "action": {"type": "string", "enum": list(cls.ACTIONS)},
+                    "account_name": {"type": "string", "description": "Defaults to the trusted execution account."},
+                    "session_id": {"type": "string"}, "session_ids": strings,
+                    "count": {"type": "integer", "minimum": 0},
+                    "cursor": {"type": "string"}, "before_event_id": {"type": "string"},
+                    "event_id": {"type": "string"}, "digest_id": {"type": "string"},
+                    "correlation_id": {"type": "string"}, "query": {"type": "string"},
+                    "event_kinds": strings, "actors": strings,
+                    "start": {"type": "string", "format": "date-time"},
+                    "end": {"type": "string", "format": "date-time"},
+                    "expected_last_event_id": {**nullable, "description": "Omit/null: no guard; empty string: guard an empty stream; otherwise the expected tail ID."},
+                    "event": event, "events": {"type": "array", "items": event, "minItems": 1},
+                    "friendly_name": nullable, "context_name": nullable,
+                    "tags": strings, "metadata": {"type": "object"}, "changes": changes,
+                }, "required": ["action"], "additionalProperties": False,
             },
-            "strict": True,
+            # Optional action-specific fields and arbitrary JSON payloads require non-strict mode.
+            "strict": False,
         }
 
     @classmethod
-    def result_schema(cls) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "ok": {"type": "boolean"},
-                "tool": {"type": "string"},
-                "action": {"type": "string"},
-                "session": {"type": "object"},
-                "sessions": {"type": "array", "items": {"type": "object"}},
-                "events": {"type": "array", "items": {"type": "object"}},
-                "status": {"type": "string"},
-                "event_ids": {"type": "array", "items": {"type": "string"}},
-                "event_count": {"type": "integer"},
-                "invalidated_digest_ids": {"type": "array", "items": {"type": "string"}},
-                "error": {"type": "string"},
-            },
-            "required": ["ok", "tool", "action"],
-            "additionalProperties": True,
-        }
+    def result_schema(cls):
+        return {"type": "object", "properties": {
+            "ok": {"type": "boolean"}, "tool": {"type": "string"},
+            "action": {"type": "string"}, "error": {"type": "string"},
+        }, "required": ["ok", "tool", "action"], "additionalProperties": True}
 
-    def execute(self, args: Dict[str, Any], *, account_name: str = "auto", **context: Any) -> Dict[str, Any]:
+    def execute(self, args: dict[str, Any], *, account_name: str = "auto", **context: Any):
         action = str(args.get("action") or "").strip().lower()
         memory = context.get("episodic_store") or self.memory
         if memory is None:
             return self._error(action, "episodic_store not available")
-        requested_account = str(args.get("account_name") or "").strip()
-        resolved_account = requested_account or str(account_name or "").strip()
-        raw_session_id = args.get("session_id")
-        session_id = raw_session_id.strip() if isinstance(raw_session_id, str) else ""
-
         try:
-            from galet_memory import EpisodicEvent, EpisodicMemoryRequest, EpisodicSessionQuery
+            from galet_memory import EMPTY_TAIL, NewEvent, SessionChanges
 
-            if not resolved_account or resolved_account == "auto":
-                return self._error(action, "account_name is required")
-            if account_name not in ("", "auto", None) and resolved_account != account_name:
-                return self._error(action, "account_name does not match the execution account")
-            # The tool does not expose another account's session or mutate it.
-            if session_id and action not in ("create_session", "list_sessions"):
-                owned = memory.get_session(session_id, include_events=False)
-                if owned is None or owned.account_name != resolved_account:
-                    return self._error(action, "Session not found for account")
+            if action not in self.ACTIONS:
+                raise ValueError(f"Unknown action: {action!r}; use an explicit session/event/digest action")
+            unknown = set(args) - set(self.tool_def()["parameters"]["properties"])
+            if unknown:
+                raise ValueError(f"Unknown parameters: {', '.join(sorted(unknown))}")
+            resolved = self._text(args.get("account_name") or account_name, "account_name")
+            if resolved == "auto":
+                raise ValueError("account_name is required")
+            if account_name not in ("", "auto", None) and resolved != account_name:
+                raise ValueError("account_name does not match the execution account")
+            kw = {"account_name": resolved}
+            if action not in ("create_session", "list_sessions", "delete_sessions", "search_digests"):
+                kw["session_id"] = self._text(args.get("session_id"), "session_id")
+            tail = args.get("expected_last_event_id")
+            if tail is not None and not isinstance(tail, str):
+                raise ValueError("expected_last_event_id must be a string or null")
+            guard = EMPTY_TAIL if tail == "" else tail
+            if action in ("append_event", "append_events", "clear_session_events", "invalidate_exchange"):
+                kw["expected_last_event_id"] = guard
+            if action in ("list_sessions", "get_recent_events", "get_events_by_period", "list_digests", "search_digests"):
+                default = {"get_recent_events": 10, "get_events_by_period": 100, "search_digests": 3}.get(action, 20)
+                count = args.get("count", default)
+                if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                    raise ValueError("count must be a nonnegative integer")
+                kw["count"] = count
+            if action in ("list_sessions", "get_events_by_period", "list_digests"):
+                kw["cursor"] = self._optional_text(args.get("cursor"), "cursor")
+            if action in ("get_recent_events", "get_events_by_period"):
+                for key in ("event_kinds", "actors"):
+                    kw[key] = self._strings(args[key], key) if key in args else None
+            if action == "get_recent_events":
+                kw["before_event_id"] = self._optional_text(args.get("before_event_id"), "before_event_id")
+            elif action == "get_events_by_period":
+                kw.update(start=self._timestamp(args.get("start")), end=self._timestamp(args.get("end")))
+            elif action in ("get_exchange", "invalidate_exchange"):
+                kw["correlation_id"] = self._text(args.get("correlation_id"), "correlation_id")
+            elif action in ("get_event", "get_digest"):
+                key = "event_id" if action == "get_event" else "digest_id"
+                kw[key] = self._text(args.get(key), key)
+            elif action == "create_session":
+                if args.get("session_id"):
+                    kw["session_id"] = self._text(args["session_id"], "session_id")
+                for key in ("friendly_name", "context_name"):
+                    if key in args:
+                        kw[key] = self._nullable_text(args[key], key)
+                if "tags" in args:
+                    kw["tags"] = self._strings(args["tags"], "tags")
+                if "metadata" in args:
+                    kw["metadata"] = self._object(args["metadata"], "metadata")
+            elif action == "update_session":
+                changes = dict(self._object(args.get("changes"), "changes"))
+                if set(changes) - {"friendly_name", "context_name", "tags", "metadata"}:
+                    raise ValueError("Unknown SessionChanges fields")
+                for key in ("friendly_name", "context_name"):
+                    if key in changes:
+                        changes[key] = self._nullable_text(changes[key], key)
+                if "tags" in changes:
+                    changes["tags"] = tuple(self._strings(changes["tags"], "tags"))
+                if "metadata" in changes:
+                    self._object(changes["metadata"], "metadata")
+                kw["changes"] = SessionChanges(**changes)
+            elif action == "delete_sessions":
+                ids = self._strings(args.get("session_ids"), "session_ids")
+                if not ids or len(ids) > 100:
+                    raise ValueError("session_ids requires 1 to 100 session IDs")
+                kw["session_ids"] = list(dict.fromkeys(ids))
+            elif action in ("append_event", "append_events"):
+                def new_event(raw):
+                    raw = dict(self._object(raw, "event"))
+                    if set(raw) - {"role", "content", "actor", "kind", "created_at", "metadata", "correlation_ids"}:
+                        raise ValueError("Unknown NewEvent fields")
+                    for key in ("role", "actor"):
+                        raw[key] = self._text(raw.get(key), key)
+                    if "content" not in raw:
+                        raise ValueError("content is required")
+                    if "created_at" in raw:
+                        raw["created_at"] = self._timestamp(raw["created_at"])
+                    if "correlation_ids" in raw:
+                        raw["correlation_ids"] = tuple(self._strings(raw["correlation_ids"], "correlation_ids"))
+                    if "metadata" in raw:
+                        self._object(raw["metadata"], "metadata")
+                    if "kind" in raw and not isinstance(raw["kind"], str):
+                        raise ValueError("kind must be a string")
+                    return NewEvent(**raw)
+                if action == "append_event":
+                    kw["event"] = new_event(args.get("event"))
+                else:
+                    raw = args.get("events")
+                    if not isinstance(raw, list) or not raw:
+                        raise ValueError("events must be a nonempty array")
+                    kw["events"] = [new_event(item) for item in raw]
+            elif action == "search_digests":
+                kw["query"] = self._text(args.get("query"), "query")
+                kw["session_id"] = self._optional_text(args.get("session_id"), "session_id")
 
-            if action == "invalidate_events":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                correlation_id = str(args.get("correlation_id") or "").strip()
-                if not correlation_id:
-                    return self._error(action, "correlation_id is required")
-                expected_tail = args.get("expected_last_event_id")
-                if expected_tail is not None and not isinstance(expected_tail, str):
-                    return self._error(action, "expected_last_event_id must be a string or null")
-                result = memory.invalidate_events(
-                    account_name=resolved_account, session_id=session_id,
-                    correlation_id=correlation_id,
-                    expected_last_event_id=expected_tail or None,
-                )
-                return {
-                    "ok": True, "tool": self.NAME, "action": action,
-                    "session_id": result.session_id, "correlation_id": result.correlation_id,
-                    "status": result.status, "event_ids": list(result.event_ids),
-                    "event_count": result.event_count,
-                    "invalidated_digest_ids": list(result.invalidated_digest_ids),
-                    "marker_event_id": result.marker_event_id,
-                    "unprovenanced_digests_invalidated": result.unprovenanced_digests_invalidated,
-                }
-
-            if action == "recall":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                result = memory.recall(
-                    EpisodicMemoryRequest(
-                        account_name=resolved_account,
-                        agent_name=str(args.get("agent_name") or "").strip(),
-                        conversation_id=session_id,
-                        query=str(args.get("query") or "").strip(),
-                        max_events=max(0, int(args.get("max_events", 6))),
-                        include_archived_digests=False,
-                    )
-                )
-                return {
-                    "ok": True,
-                    "tool": self.NAME,
-                    "action": action,
-                    "session_id": result.session_id or session_id,
-                    "session": {
-                        "account_name": result.session_account_name,
-                        "agent_name": result.session_agent_name,
-                        "context_name": result.session_context_name,
-                        "friendly_name": result.session_friendly_name,
-                        "session_type": result.session_type,
-                        "participants": list(result.session_participants),
-                        "tags": list(result.session_tags),
-                        "updated_at": result.session_updated_at.isoformat() if result.session_updated_at else None,
-                    },
-                    "events": [self._event_dict(event) for event in result.events],
-                    "event_count": len(result.events),
-                    "dropped_event_count": result.dropped_event_count,
-                    "metadata": dict(result.metadata),
-                }
-
-            if action == "get_session":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                event_scope = str(args.get("event_scope") or "active")
-                if event_scope not in ("active", "all", "archived"):
-                    return self._error(action, "event_scope must be active, all or archived")
-                session = memory.get_session(
-                    session_id,
-                    include_events=bool(args.get("include_events", True)),
-                    event_scope=event_scope,
-                )
-                if session is None:
-                    return self._error(action, f"Session not found: {session_id}")
-                return {"ok": True, "tool": self.NAME, "action": action, "session": self._session_dict(session)}
-
-            if action == "list_sessions":
-                if not resolved_account or resolved_account == "auto":
-                    return self._error(action, "account_name is required")
-                sessions = memory.list_sessions(
-                    EpisodicSessionQuery(
-                        account_name=resolved_account,
-                        agent_name=str(args.get("agent_name") or "").strip(),
-                        query=str(args.get("query") or "").strip(),
-                        limit=max(1, int(args.get("limit", 20))),
-                    )
-                )
-                return {
-                    "ok": True,
-                    "tool": self.NAME,
-                    "action": action,
-                    "sessions": [self._session_dict(session) for session in sessions],
-                    "count": len(sessions),
-                }
-
-            if action == "append_event":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                content = str(args.get("content") or "")
-                if not content:
-                    return self._error(action, "content is required")
-                role = str(args.get("role") or "user").strip()
-                stored = memory.append_event(
-                    session_id,
-                    EpisodicEvent(
-                        role=role,
-                        actor=role,
-                        kind=str(args.get("kind") or "").strip(),
-                        content=content,
-                    ),
-                )
-                return {"ok": True, "tool": self.NAME, "action": action, "event": self._event_dict(stored)}
-
-            if action == "create_session":
-                agent_name = str(args.get("agent_name") or "").strip()
-                if not agent_name:
-                    return self._error(action, "agent_name is required")
-                kwargs: Dict[str, Any] = {}
-                if str(args.get("session_id") or "").strip():
-                    kwargs["session_id"] = str(args.get("session_id") or "").strip()
-                if str(args.get("user_id") or "").strip():
-                    kwargs["user_id"] = str(args.get("user_id") or "").strip()
-                if str(args.get("friendly_name") or "").strip():
-                    kwargs["friendly_name"] = str(args.get("friendly_name") or "").strip()
-                if str(args.get("context_name") or "").strip():
-                    kwargs["context_name"] = str(args.get("context_name") or "").strip()
-                if str(args.get("session_type") or "").strip():
-                    kwargs["session_type"] = str(args.get("session_type") or "").strip()
-                if args.get("tags"):
-                    kwargs["tags"] = list(args.get("tags"))
-                if args.get("participants"):
-                    kwargs["participants"] = list(args.get("participants"))
-                if args.get("links"):
-                    raw_links = dict(args.get("links") or {})
-                    allowed = {"user_session_id", "internal_session_id"}
-                    filtered = {k: v for k, v in raw_links.items() if k in allowed}
-                    if filtered:
-                        kwargs["links"] = filtered
-                if args.get("metadata"):
-                    kwargs["metadata"] = dict(args.get("metadata") or {})
-
-                created = memory.create_session(
-                    account_name=resolved_account,
-                    agent_name=agent_name,
-                    **kwargs,
-                )
-                return {"ok": True, "tool": self.NAME, "action": action, "session": self._session_dict(created)}
-
-            if action == "update_session":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                patch: Dict[str, Any] = {}
-                for key in ("friendly_name", "context_name", "session_type"):
-                    v = args.get(key)
-                    if v is not None and (not isinstance(v, str) or str(v).strip() != ""):
-                        patch[key] = v
-                for key in ("tags", "participants", "metadata"):
-                    if args.get(key) is not None:
-                        patch[key] = args.get(key)
-                if args.get("links") is not None:
-                    raw_links = dict(args.get("links") or {})
-                    allowed = {"user_session_id", "internal_session_id"}
-                    filtered = {k: v for k, v in raw_links.items() if k in allowed}
-                    if filtered:
-                        patch["links"] = filtered
-
-                updated = memory.update_session(session_id, patch)
-                return {"ok": True, "tool": self.NAME, "action": action, "session": self._session_dict(updated)}
-
-            if action == "reset_session":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                memory.reset_session(session_id)
-                return {"ok": True, "tool": self.NAME, "action": action, "session_id": session_id}
-
-            if action == "delete_sessions":
-                ids = raw_session_id
-                if not isinstance(ids, list) or not ids or any(
-                    not isinstance(sid, str) or not sid.strip() for sid in ids
-                ):
-                    return self._error(action, "session_id must be a nonempty array of session IDs for delete_sessions")
-                if len(ids) > 100:
-                    return self._error(action, "at most 100 session IDs per request")
-                selected = list(dict.fromkeys(sid.strip() for sid in ids))
-                for sid in selected:
-                    owned = memory.get_session(sid, include_events=False)
-                    if owned is not None and owned.account_name != resolved_account:
-                        return self._error(action, "Session not found for account")
-                deleted = memory.delete_sessions(selected)
-                return {
-                    "ok": True, "tool": self.NAME, "action": action,
-                    "session_ids": deleted, "count": len(deleted),
-                }
-
-            if action == "delete_session":
-                if not session_id:
-                    return self._error(action, "session_id is required")
-                memory.delete_session(session_id)
-                return {"ok": True, "tool": self.NAME, "action": action, "session_id": session_id}
-
-            return self._error(action, f"Unknown action: {action!r}")
+            result = getattr(memory, action)(**kw)
+            output = {"ok": True, "tool": self.NAME, "action": action}
+            if action in ("create_session", "get_session", "update_session"):
+                if result is None:
+                    raise ValueError("Session not found for account")
+                output["session"] = self._serialize(result)
+            elif action in ("list_sessions", "list_digests"):
+                key = "sessions" if action == "list_sessions" else "digests"
+                output.update({key: self._serialize(result.items), "count": len(result.items), "next_cursor": result.next_cursor})
+            elif action in ("get_recent_events", "get_events_by_period"):
+                output.update(self._serialize(result))
+                output["event_count"] = len(result.events)
+            elif action == "invalidate_exchange":
+                output.update(self._serialize(result))
+                output["event_count"] = result.event_count
+            elif action in ("get_event", "append_event", "get_digest", "get_exchange"):
+                key = {"get_digest": "digest", "get_exchange": "exchange"}.get(action, "event")
+                output[key] = self._serialize(result)
+            elif action in ("append_events", "search_digests", "delete_sessions"):
+                key = {"append_events": "events", "search_digests": "matches", "delete_sessions": "session_ids"}[action]
+                output.update({key: self._serialize(result), "count": len(result)})
+            elif action == "clear_session_events":
+                output.update(self._serialize(result))
+            elif action == "delete_session":
+                output.update(session_id=kw["session_id"], deleted=result)
+            return output
         except Exception as exc:
             return self._error(action, f"{type(exc).__name__}: {exc}")
 
-    @classmethod
-    def _session_dict(cls, session: Any) -> Dict[str, Any]:
-        return {
-            "session_id": session.session_id,
-            "user_id": session.user_id,
-            "account_name": session.account_name,
-            "agent_name": session.agent_name,
-            "friendly_name": session.friendly_name,
-            "context_name": session.context_name,
-            "session_type": session.session_type,
-            "participants": list(session.participants),
-            "links": dict(session.links),
-            "created_at": session.created_at.isoformat() if session.created_at else None,
-            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
-            "tags": list(session.tags),
-            "metadata": dict(session.metadata),
-            "last_event_id": session.last_event_id,
-            "events": [cls._event_dict(event) for event in session.events],
-        }
+    @staticmethod
+    def _text(value, name):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} is required")
+        return value.strip()
 
     @staticmethod
-    def _event_dict(event: EpisodicEvent) -> Dict[str, Any]:
-        return {
-            "event_id": event.event_id,
-            "role": event.role,
-            "actor": event.actor,
-            "kind": event.kind,
-            "content": event.content,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
-            "metadata": dict(event.metadata),
-        }
+    def _nullable_text(value, name):
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"{name} must be a string or null")
+        return value
 
     @classmethod
-    def _error(cls, action: str, message: str) -> Dict[str, Any]:
+    def _optional_text(cls, value, name):
+        return None if value is None else cls._text(value, name)
+
+    @classmethod
+    def _strings(cls, value, name):
+        if not isinstance(value, list):
+            raise ValueError(f"{name} must be an array of strings")
+        return [cls._text(item, name) for item in value]
+
+    @staticmethod
+    def _object(value, name):
+        if not isinstance(value, dict):
+            raise ValueError(f"{name} must be an object")
+        return value
+
+    @staticmethod
+    def _timestamp(value):
+        if not isinstance(value, str):
+            raise ValueError("timestamp must be a timezone-aware ISO string")
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("timestamp must include a timezone")
+        return parsed
+
+    @classmethod
+    def _serialize(cls, value):
+        if is_dataclass(value):
+            return cls._serialize(asdict(value))
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {key: cls._serialize(item) for key, item in value.items()}
+        if isinstance(value, (tuple, list)):
+            return [cls._serialize(item) for item in value]
+        return value
+
+    @classmethod
+    def _error(cls, action, message):
         return {"ok": False, "tool": cls.NAME, "action": action, "error": message}
 
 
