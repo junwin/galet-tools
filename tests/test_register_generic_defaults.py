@@ -62,7 +62,8 @@ PROPERTY_KEYS = {
         "wrapper",
     },
     "generate_svg": {"svg_code", "description", "width", "height"},
-    "video_generate": {"image_id", "prompt", "duration_seconds"},
+    "video_generate": {"image_id", "prompt", "duration_seconds", "source", "model",
+                       "aspect_ratio", "resolution", "preserve_subject", "add_sound"},
 }
 
 

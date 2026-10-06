@@ -146,6 +146,53 @@ empty before publication and returns the digest afterward. In an application, in
 `galet_memory.curation.CurationService` with the application's digest generator
 and construct `CurateChatHandler(service)` through a registry factory.
 
+## Video generation
+
+`video_generate` accepts an uploaded `image_id`, a motion `prompt`, and
+`duration_seconds` (4, 6, or 8). These three arguments are required. The
+following arguments can be supplied for each request or omitted to use defaults:
+
+| Argument | Default | Supported values |
+| --- | --- | --- |
+| `source` | `google` | Currently Google only; other providers fail explicitly |
+| `model` | `veo-3.1-fast-generate-preview` | Google video model ID |
+| `aspect_ratio` | `9:16` | `9:16`, `16:9` |
+| `resolution` | `720p` | `720p`, `1080p`, `4k`; the latter two require 8 seconds |
+| `preserve_subject` | `true` | Boolean; adds identity/garment preservation instructions |
+| `add_sound` | `false` | Boolean; false removes audio, true retains provider audio |
+
+Example tool arguments:
+
+```json
+{
+  "image_id": "<uploaded image UUID>",
+  "prompt": "One gentle step forward and a slight turn.",
+  "duration_seconds": 4,
+  "source": "google",
+  "model": "veo-3.1-fast-generate-preview",
+  "aspect_ratio": "9:16",
+  "resolution": "720p",
+  "preserve_subject": true,
+  "add_sound": false
+}
+```
+
+Install `galet-tools[video]` and Galet's Gemini SDK dependency (`galet[gemini]`)
+for Google generation. Silent output also requires **FFmpeg on the host PATH**
+(e.g. `sudo apt install ffmpeg` on Debian/Ubuntu). The handler checks this before
+submitting a paid generation request. Google's Gemini Developer API does not
+accept the SDK's `generate_audio` setting, so silent output is implemented by
+removing all audio tracks after download, copying the video stream without
+re-encoding. This does not reduce provider generation charges. `add_sound=true`
+retains whatever audio the provider returns; it does not synthesize a separate
+soundtrack. Subject preservation is a prompt instruction, not a guarantee.
+
+Results include the selected source, model, aspect ratio, resolution,
+`preserve_subject`, and `add_sound` alongside the video metadata. Defaults are
+applied by the handler, including for older callers supplying only the three
+original arguments. The tool schema uses `strict=false` so defaulted arguments
+can genuinely be omitted.
+
 ## MCP server
 
 An optional MCP (Model Context Protocol) server exposes the generic
