@@ -148,3 +148,46 @@ def test_webp_is_saved_as_png_with_alpha(tmp_path):
         assert saved.format == 'PNG'
         assert saved.size == (16, 16)
         assert saved.getpixel((0, 0))[3] == 120
+
+
+def test_source_selects_google_router_prefix(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'source': 'google', 'model': 'gemini-2.5-flash-image'}, account_name='john')
+    assert result['ok']
+    assert api.generate_image.call_args.kwargs['model'] == 'gemini/gemini-2.5-flash-image'
+
+
+def test_source_selects_openai_router_prefix(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'source': 'openai', 'model': 'gpt-image-1'}, account_name='john')
+    assert result['ok']
+    assert api.generate_image.call_args.kwargs['model'] == 'openai/gpt-image-1'
+
+
+def test_omitted_source_preserves_original_model(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'model': 'gpt-image-1'}, account_name='john')
+    assert result['ok']
+    assert api.generate_image.call_args.kwargs['model'] == 'gpt-image-1'
+
+
+def test_invalid_source_rejected_before_provider_call(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'source': 'unknown', 'model': 'gpt-image-1'}, account_name='john')
+    assert not result['ok']
+    assert 'source must be' in result['error']
+    api.generate_image.assert_not_called()
+
+
+def test_conflicting_model_prefix_rejected(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'source': 'google', 'model': 'openai/gpt-image-1'}, account_name='john')
+    assert not result['ok']
+    assert 'conflicts' in result['error']
+    api.generate_image.assert_not_called()
+
+
+def test_source_is_nullable_for_strict_schema():
+    params = ImageGenerateHandler.tool_def()['parameters']
+    assert params['properties']['source']['type'] == ['string', 'null']
+    assert 'source' in params['required']
