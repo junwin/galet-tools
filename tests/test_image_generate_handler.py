@@ -191,3 +191,11 @@ def test_source_is_nullable_for_strict_schema():
     params = ImageGenerateHandler.tool_def()['parameters']
     assert params['properties']['source']['type'] == ['string', 'null']
     assert 'source' in params['required']
+
+
+def test_explicit_source_cannot_be_overridden_by_bare_model(tmp_path):
+    handler, api = make_handler(tmp_path)
+    result = handler.execute({'prompt': 'A garden', 'source': 'google', 'model': 'gpt-image-1'}, account_name='john')
+    assert not result['ok']
+    assert 'not supported by the selected source' in result['error']
+    api.generate_image.assert_not_called()
