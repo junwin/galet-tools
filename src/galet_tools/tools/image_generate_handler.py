@@ -33,6 +33,7 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
         properties = {
             "prompt": {"type": "string", "description": "Final instruction to the image model."},
             "model": {"type": "string", "description": "Galet image model, e.g. gpt-image-1 or gemini-2.5-flash-image."},
+            "source": {"type": ["string", "null"], "description": "Optional provider: openai or google (gemini alias accepted); null uses model-based routing."},
             "size": {"type": "string", "description": "Output size, e.g. 1024x1024."},
             "quality": {"type": "string", "enum": ["standard", "hd", "low", "medium", "high", "auto"]},
             "image_ids": {"type": "array", "items": {"type": "string"}, "description": "Reference upload UUIDs in the current account; [] for text-only generation."},
@@ -118,6 +119,18 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
             model = args.get("model", "")
             if not isinstance(model, str) or not model.strip():
                 raise ValueError("model is required")
+
+            source = args.get("source")
+            if source is not None:
+                if not isinstance(source, str) or source.strip().lower() not in {"openai", "google", "gemini"}:
+                    raise ValueError("source must be openai, google, gemini, or null")
+                provider = "gemini" if source.strip().lower() in {"google", "gemini"} else "openai"
+                unqualified = model.strip().split("/", 1)[-1]
+                if "/" in model.strip():
+                    prefix = model.strip().split("/", 1)[0].lower()
+                    if prefix not in {"openai", "gemini"} or prefix != provider:
+                        raise ValueError("source conflicts with model provider prefix")
+                model = f"{provider}/{unqualified}"
 
             def load_images(ids: Any) -> tuple:
                 if not isinstance(ids, list):
