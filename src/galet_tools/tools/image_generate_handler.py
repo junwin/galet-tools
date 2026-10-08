@@ -130,6 +130,15 @@ class ImageGenerateHandler(UploadedImageResolver, HandlerV2):
                     prefix = model.strip().split("/", 1)[0].lower()
                     if prefix not in {"openai", "gemini"} or prefix != provider:
                         raise ValueError("source conflicts with model provider prefix")
+                inferred = (
+                    "openai" if unqualified.startswith(("openai", "dall-e", "gpt-image"))
+                    else "gemini" if unqualified.startswith(("gemini", "imagen"))
+                    else None
+                )
+                if inferred != provider:
+                    raise ValueError(
+                        "model is not supported by the selected source in the current Galet image router"
+                    )
                 model = f"{provider}/{unqualified}"
 
             def load_images(ids: Any) -> tuple:
