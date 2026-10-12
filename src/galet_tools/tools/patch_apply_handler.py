@@ -41,7 +41,12 @@ class PatchApplyHandler2(HandlerV2):
             "name": cls.NAME,
             "description": (
                 "Validate or apply a unified-diff patch to exactly one file. "
-                "The path in the patch must match path exactly."
+                "Keep path relative to the selected root, including any repository directory. "
+                "Use numbered unified-diff hunks and either a/path + b/path headers "
+                "or prefix-free path headers. Do not use *** Begin Patch syntax. "
+                "Example for path='repo/file.txt': "
+                "--- a/repo/file.txt\n+++ b/repo/file.txt\n@@ -1 +1 @@\n-old\n+new\n"
+                "Use check_only=true to validate before applying."
             ),
             "parameters": {
                 "type": "object",
@@ -88,6 +93,8 @@ class PatchApplyHandler2(HandlerV2):
                 "external_root": {"type": "string"},
                 "path": {"type": "string"},
                 "affected_paths": {"type": "array", "items": {"type": "string"}},
+                "strip_components": {"type": "integer"},
+                "path_attempts": {"type": "array", "items": {"type": "object"}},
                 "error": {"type": "string"},
                 "details": {"type": "string"},
                 "stdout": {"type": "string"},
@@ -258,6 +265,16 @@ class PatchApplyHandler2(HandlerV2):
                 path=normalized_path,
             )
 
+        if patch_content.lstrip().startswith("*** Begin Patch"):
+            return self._invalid(
+                "unsupported patch format: use a unified diff, not *** Begin Patch",
+                location=location,
+                external_root=external_root,
+                path=normalized_path,
+                details="Use --- a/<path>, +++ b/<path> (or prefix-free headers) "
+                "and numbered @@ -old,count +new,count @@ hunks.",
+            )
+
         forbidden_markers = (
             "GIT binary patch",
             "new file mode 120000",
@@ -328,41 +345,50 @@ class PatchApplyHandler2(HandlerV2):
                 handle.write(patch_content)
                 patch_file = handle.name
 
-            numstat = subprocess.run(
-                [git_executable, "apply", "--numstat", "-z", patch_file],
-                cwd=base_dir,
-                capture_output=True,
-                timeout=_GIT_TIMEOUT_SECONDS,
-            )
-            if numstat.returncode != 0:
-                return self._invalid(
-                    "could not inspect patch paths",
-                    location=location,
-                    external_root=external_root,
-                    path=normalized_path,
-                    stdout=self._decode_git_output(numstat.stdout),
-                    stderr=self._decode_git_output(numstat.stderr),
+            # Match the caller's exact root-relative target before selecting a
+            # strip setting. Never guess by shortening the requested path, and
+            # never change the setting after a failed content check.
+            path_attempts = []
+            strip_components = None
+            for candidate in (1, 0):
+                numstat = subprocess.run(
+                    [git_executable, "apply", f"-p{candidate}", "--numstat", "-z", patch_file],
+                    cwd=base_dir,
+                    capture_output=True,
+                    timeout=_GIT_TIMEOUT_SECONDS,
                 )
+                affected_paths, parse_error = (self._paths_from_numstat(numstat.stdout)
+                    if numstat.returncode == 0 else ([], "could not inspect patch paths"))
+                path_attempts.append({
+                    "strip_components": candidate,
+                    "affected_paths": affected_paths,
+                    "error": parse_error,
+                    "stdout": self._decode_git_output(numstat.stdout),
+                    "stderr": self._decode_git_output(numstat.stderr),
+                })
+                if not parse_error and affected_paths == [normalized_path]:
+                    strip_components = candidate
+                    break
 
-            affected_paths, parse_error = self._paths_from_numstat(numstat.stdout)
-            if parse_error:
+            if strip_components is None:
+                inspected = next((attempt for attempt in path_attempts if not attempt["error"]), None)
+                diagnostic = inspected or path_attempts[0]
                 return self._invalid(
-                    parse_error,
+                    "patch must affect exactly the requested path" if inspected else diagnostic["error"],
                     location=location,
                     external_root=external_root,
                     path=normalized_path,
-                )
-            if affected_paths != [normalized_path]:
-                return self._invalid(
-                    "patch must affect exactly the requested path",
-                    location=location,
-                    external_root=external_root,
-                    path=normalized_path,
-                    affected_paths=affected_paths,
+                    affected_paths=diagnostic["affected_paths"],
+                    path_attempts=path_attempts,
+                    stdout=diagnostic["stdout"],
+                    stderr=diagnostic["stderr"],
+                    details="Keep path relative to the selected root. Diff headers must name that "
+                    "same file, either with a/ and b/ prefixes or without prefixes. "
+                    "For malformed hunks, correct the numbered hunk counts; do not shorten path.",
                 )
 
             checked = subprocess.run(
-                [git_executable, "apply", "--check", patch_file],
+                [git_executable, "apply", f"-p{strip_components}", "--check", patch_file],
                 cwd=base_dir,
                 capture_output=True,
                 text=True,
@@ -375,6 +401,7 @@ class PatchApplyHandler2(HandlerV2):
                     external_root=external_root,
                     path=normalized_path,
                     affected_paths=affected_paths,
+                    strip_components=strip_components,
                     stdout=checked.stdout,
                     stderr=checked.stderr,
                 )
@@ -387,12 +414,13 @@ class PatchApplyHandler2(HandlerV2):
                     external_root=external_root,
                     path=normalized_path,
                     affected_paths=affected_paths,
+                    strip_components=strip_components,
                     stdout=checked.stdout,
                     stderr=checked.stderr,
                 )
 
             applied = subprocess.run(
-                [git_executable, "apply", patch_file],
+                [git_executable, "apply", f"-p{strip_components}", patch_file],
                 cwd=base_dir,
                 capture_output=True,
                 text=True,
@@ -405,6 +433,7 @@ class PatchApplyHandler2(HandlerV2):
                     external_root=external_root,
                     path=normalized_path,
                     affected_paths=affected_paths,
+                    strip_components=strip_components,
                     stdout=applied.stdout,
                     stderr=applied.stderr,
                 )
@@ -416,6 +445,7 @@ class PatchApplyHandler2(HandlerV2):
                 external_root=external_root,
                 path=normalized_path,
                 affected_paths=affected_paths,
+                strip_components=strip_components,
                 stdout=applied.stdout,
                 stderr=applied.stderr,
             )
@@ -476,3 +506,4 @@ class PatchApplyHandler2(HandlerV2):
 
 
 __all__ = ["PatchApplyHandler2"]
+
