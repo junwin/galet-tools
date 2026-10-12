@@ -10,10 +10,10 @@ from galet_tools.ports.storage_location_resolver import StorageLocationResolver
 
 
 class FileSaveHandler2(HandlerV2):
-    """Save text content to a file under a named storage or external location.
+    """Save text under a configured named root.
 
-    Mirrors FileLoadHandler2's location scheme. The strict tool_def exposes
-    no legacy alias keys; execute_raw maps relative_path for back-compat.
+    The model-facing schema uses external_root and a relative path. Runtime
+    calls retain legacy location handling and the relative_path alias.
     """
 
     NAME = "file_save"
@@ -33,23 +33,22 @@ class FileSaveHandler2(HandlerV2):
             "description": (
                 "Save code or text into a file under a named location. "
                 "Paths are always relative. "
-                "location='storage' uses Lucy storage; location='external' uses external_root."
+                "The configured root is selected by external_root."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {
-                        "type": "string",
-                        "enum": ["storage", "external"],
-                        "description": "Where to save to.",
-                    },
                     "external_root": {
                         "type": "string",
-                        "description": "Named external root key when location='external'. Use '' otherwise.",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
                     },
                     "path": {
                         "type": "string",
-                        "description": "Relative path under the chosen location (no leading /, no ..).",
+                        "description": "Relative path under the selected root (no leading /, no ..).",
                     },
                     "file_content": {
                         "type": "string",
@@ -61,7 +60,7 @@ class FileSaveHandler2(HandlerV2):
                         "default": True,
                     },
                 },
-                "required": ["location", "external_root", "path", "file_content", "overwrite"],
+                "required": [ "external_root", "path", "file_content", "overwrite"],
                 "additionalProperties": False,
             },
             "strict": True,
@@ -90,7 +89,7 @@ class FileSaveHandler2(HandlerV2):
         }
 
     def execute(self, args: Dict[str, Any], *, account_name: str = "auto") -> Dict[str, Any]:
-        location = (args.get("location") or "storage").strip().lower()
+        location = (args.get("location") or ("external" if args.get("external_root") else "storage")).strip().lower()
         external_root = (args.get("external_root") or "").strip()
         path_in = (args.get("path") or "").strip()
         file_content = args.get("file_content")
@@ -220,7 +219,7 @@ class FileSaveHandler2(HandlerV2):
                 args["path"] = args.get("relative_path")
 
             if "location" not in args:
-                args["location"] = "storage"
+                args["location"] = "external" if args.get("external_root") else "storage"
             if "external_root" not in args:
                 args["external_root"] = ""
             if "overwrite" not in args:
@@ -277,3 +276,4 @@ class FileSaveHandler2(HandlerV2):
             f.write(content)
 
         return full_real
+

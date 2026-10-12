@@ -25,16 +25,14 @@ EXPECTED_NAMES = [
 
 PROPERTY_KEYS = {
     "file_load": {
-        "location",
         "external_root",
         "path",
         "start_line",
         "line_count",
         "include_line_numbers",
     },
-    "file_save": {"location", "external_root", "path", "file_content", "overwrite"},
+    "file_save": {"external_root", "path", "file_content", "overwrite"},
     "patch_apply": {
-        "location",
         "external_root",
         "path",
         "patch_content",
@@ -46,14 +44,12 @@ PROPERTY_KEYS = {
         "arguments",
         "script",
         "shell",
-        "location",
         "external_root",
         "working_directory",
         "timeout_seconds",
         "success_exit_codes",
     },
     "execute_command": {
-        "location",
         "external_root",
         "command",
         "working_directory",
@@ -106,3 +102,4 @@ class TestRegistryBuild:
         register_generic_defaults(reg)
         with pytest.raises(ValueError):
             reg.register(CommandExecutionHandler2)
+

@@ -10,7 +10,7 @@ def resolve_repository_root(
     resolver: StorageLocationResolver,
     args: dict[str, Any],
 ) -> tuple[str | None, dict[str, Any] | None]:
-    location = (args.get("location") or "storage").strip().lower()
+    location = (args.get("location") or ("external" if args.get("external_root") else "storage")).strip().lower()
     external_root = (args.get("external_root") or "").strip()
     relative_root = (args.get("root") or ".").strip()
 
@@ -41,3 +41,4 @@ def resolve_repository_root(
     if not os.path.isdir(root_real):
         return None, {"error": f"repository root is not a directory: {relative_root}"}
     return root_real, None
+

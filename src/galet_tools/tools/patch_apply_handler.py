@@ -51,12 +51,12 @@ class PatchApplyHandler2(HandlerV2):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string", "enum": ["storage", "external"]},
                     "external_root": {
                         "type": "string",
+                        "minLength": 1,
                         "description": (
-                            "Named external root for location='external'; "
-                            "use an empty string for location='storage'."
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
                         ),
                     },
                     "path": {
@@ -70,7 +70,6 @@ class PatchApplyHandler2(HandlerV2):
                     },
                 },
                 "required": [
-                    "location",
                     "external_root",
                     "path",
                     "patch_content",
@@ -202,7 +201,7 @@ class PatchApplyHandler2(HandlerV2):
         if not isinstance(args, dict):
             return self._invalid("arguments must be an object")
 
-        location_value = args.get("location")
+        location_value = args.get("location", "external")
         external_root_value = args.get("external_root")
         raw_path = args.get("path")
         patch_content = args.get("patch_content")

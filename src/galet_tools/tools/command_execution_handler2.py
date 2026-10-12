@@ -19,11 +19,12 @@ IS_WINDOWS = sys.platform == "win32"
 
 
 class CommandExecutionHandler2(HandlerV2):
-    """Run a command under a sandbox or external base directory.
+    """Run a command under a configured named root.
 
-    Callers give a location ('sandbox', or 'external' with a named
-    external_root) and a relative working_directory; '.' means the root of
-    the chosen base. Shell operators require an explicit wrapper. The
+    Callers give an external_root and a relative working_directory; '.' means
+    the configured root itself, without account scoping. Legacy location calls
+    retain their original sandbox/external behavior. Shell operators require
+    an explicit wrapper. The
     SecurityPolicy port makes the allow/deny decision and sets the output
     truncation limit; path rules stay inline below.
     """
@@ -52,21 +53,20 @@ class CommandExecutionHandler2(HandlerV2):
             "type": "function",
             "name": cls.NAME,
             "description": (
-                "Run a command under a named location (sandbox or external). Non-interactive only, "
+                "Run a command under a configured named root. Non-interactive only, "
                 "executed with shell=False. For pipes/redirects/conditionals wrap in bash -lc (Linux) "
                 "or powershell (Windows). Don't use this to read files (use file_load)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {
-                        "type": "string",
-                        "enum": ["sandbox", "external"],
-                        "description": "Where to run the command.",
-                    },
                     "external_root": {
                         "type": "string",
-                        "description": "Named root when location='external'; '' otherwise.",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
                     },
                     "command": {
                         "type": "string",
@@ -74,7 +74,7 @@ class CommandExecutionHandler2(HandlerV2):
                     },
                     "working_directory": {
                         "type": "string",
-                        "description": "Relative dir under chosen location; '.' for root.",
+                        "description": "Relative dir under the selected root; '.' for root.",
                     },
                     "timeout_seconds": {
                         "type": "integer",
@@ -94,7 +94,7 @@ class CommandExecutionHandler2(HandlerV2):
                         "default": "none",
                     },
                 },
-                "required": ["location", "external_root", "command", "working_directory", "timeout_seconds", "success_exit_codes", "wrapper"],
+                "required": [ "external_root", "command", "working_directory", "timeout_seconds", "success_exit_codes", "wrapper"],
                 "additionalProperties": False,
             },
             "strict": True,
@@ -125,7 +125,7 @@ class CommandExecutionHandler2(HandlerV2):
         }
 
     def execute(self, args: Dict[str, Any], *, account_name: str = "auto") -> Dict[str, Any]:
-        location = (args.get("location") or "sandbox").strip().lower()
+        location = (args.get("location") or ("external" if args.get("external_root") else "sandbox")).strip().lower()
         external_root = (args.get("external_root") or "").strip()
         command = (args.get("command") or "").strip()
         working_directory_in = (args.get("working_directory") or "").strip()
@@ -319,7 +319,7 @@ class CommandExecutionHandler2(HandlerV2):
 
         if isinstance(args, dict):
             if "location" not in args:
-                args["location"] = "sandbox"
+                args["location"] = "external" if args.get("external_root") else "sandbox"
             if "external_root" not in args:
                 args["external_root"] = ""
             if "timeout_seconds" not in args:
@@ -486,3 +486,4 @@ class CommandExecutionHandler2(HandlerV2):
                 return True
 
         return False
+
