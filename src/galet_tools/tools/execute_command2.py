@@ -95,14 +95,21 @@ class ExecuteCommand2(HandlerV2):
                         "enum": ["none", *shells],
                         "description": f"Use 'none' for process mode. Available shell-mode values on this host: {available}.",
                     },
-                    "location": {"type": "string", "enum": ["sandbox", "external"]},
-                    "external_root": {"type": "string"},
-                    "working_directory": {"type": "string"},
+
+                    "external_root": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
+                    },
+                    "working_directory": {"type": "string", "description": "Directory relative to the selected root; use . for that root."},
                     "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
                     "success_exit_codes": {"type": "array", "items": {"type": "integer"}},
                 },
                 "required": [
-                    "mode", "executable", "arguments", "script", "shell", "location",
+                    "mode", "executable", "arguments", "script", "shell",
                     "external_root", "working_directory", "timeout_seconds", "success_exit_codes",
                 ],
                 "additionalProperties": False,
@@ -138,7 +145,7 @@ class ExecuteCommand2(HandlerV2):
         arguments = args.get("arguments")
         script = str(args.get("script") or "")
         shell = str(args.get("shell") or "none").strip().lower()
-        location = str(args.get("location") or "sandbox").strip().lower()
+        location = str(args.get("location") or ("external" if args.get("external_root") else "sandbox")).strip().lower()
         external_root = str(args.get("external_root") or "").strip()
         working_directory = str(args.get("working_directory") or "").strip()
         timeout = args.get("timeout_seconds", 30)
@@ -357,3 +364,4 @@ class ExecuteCommand2(HandlerV2):
         if len(value) <= limit:
             return value
         return value[: limit // 2] + "\n\n[... output truncated ...]\n\n" + value[-limit // 2 :]
+

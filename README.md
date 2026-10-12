@@ -110,11 +110,45 @@ loaded, does not resolve to a callable, or fails during registration raises
 intentionally fail-fast so a host cannot start with an unexpectedly incomplete
 tool set.
 
+## Named roots and relative paths
+
+File, patch, repository, and command tools use one root selector:
+`external_root`, with an exact configured name. Model-facing schemas no longer
+expose `location`. Root names are arbitrary, case-sensitive aliases supplied
+by the host's effective configuration. For example:
+
+```json
+{"external_root": "lucy_data_files", "path": "data/accounts/john/notes.txt"}
+```
+
+The resolver maps only the name to its configured directory. It does not infer
+special behavior from aliases such as `sandbox`, `storage`, or `lucy_data_files`,
+and it does not append account or namespace segments. Callers include those
+segments explicitly when needed. In Lucy, the host supplies the effective
+mapping after global/local configuration overrides; galet-tools does not load
+Lucy's configuration itself.
+
+`path` (file/patch), `root` (repository), and `working_directory` (command) stay
+relative to the selected directory. `.` selects the directory itself for
+repository/command tools. Absolute paths and escapes in these handler fields
+are rejected. Command scripts and program arguments retain their own path
+requirements and may contain absolute paths; setting a working directory does
+not confine everything a program can access.
+
+Compatibility: direct runtime calls with an explicit legacy `location` retain
+their storage/external or sandbox/external semantics, including legacy sandbox
+account scoping. Older file/repository/command calls that omit both selectors
+retain their historical defaults. A named root without `location` always uses
+the configured mapping, never a storage namespace or account sandbox. Legacy
+resolver methods and result `location` metadata remain for existing consumers.
+New model-facing calls require a non-empty `external_root`; configure roots
+explicitly rather than relying on legacy defaults.
+
 ## Applying a single-file patch
 
 `patch_apply` wraps `git apply` and requires Git on PATH, but the selected
 root does not need to be a Git repository. `path` is relative to that root:
-with `location="external"` and `external_root="repos"`, a file in a repository
+with `external_root="repos"`, a file in a repository
 may have `path="image_description/src/image_description/image/prompts.py"`.
 Keep that full root-relative path throughout validation and application.
 
@@ -254,8 +288,10 @@ Optional keys left out or set to null fall back to their defaults:
 - `allowlist` — tools to expose; the default includes `file_load`,
   `file_save`, `patch_apply`, legacy `execute_command`, structured
   `execute_command2`, `generate_svg`.
-- `external_roots` — named external roots the tools may access; default
-  none.
+- `external_roots` — arbitrary named roots for file, patch, repository, and
+  command tools; default none. Configure these for model-facing root-based
+  calls. The example includes data-store and sandbox aliases, which have no
+  special meaning to the resolver.
 - `host` — default `127.0.0.1`; loopback only.
 - `port` — default `8765`.
 - `fonts` — font paths for the generators; default none.
@@ -302,9 +338,9 @@ The default read timeout is 30s; override it with `--timeout`.
 Example round trip (storage root from `galet-mcp.json`):
 
 ```bash
-galet-tools-smoke call file_save '{"path":"smoke/hello.txt","file_content":"hello galet smoke"}'
-galet-tools-smoke call file_load '{"path":"smoke/hello.txt"}'
-galet-tools-smoke call execute_command2 '{"mode":"process","executable":"python","arguments":["-c","print(123)"],"script":"","shell":"none","location":"sandbox","external_root":"","working_directory":".","timeout_seconds":30,"success_exit_codes":[0]}'
+galet-tools-smoke call file_save '{"external_root":"lucy_data_files","path":"galet/smoke/hello.txt","file_content":"hello galet smoke","overwrite":true}'
+galet-tools-smoke call file_load '{"external_root":"lucy_data_files","path":"galet/smoke/hello.txt","start_line":null,"line_count":null,"include_line_numbers":false}'
+galet-tools-smoke call execute_command2 '{"mode":"process","executable":"python","arguments":["-c","print(123)"],"script":"","shell":"none","external_root":"sandbox","working_directory":".","timeout_seconds":30,"success_exit_codes":[0]}'
 ```
 
 Exit codes: `0` ok; `1` tool reported an error (`isError`); `2` usage or

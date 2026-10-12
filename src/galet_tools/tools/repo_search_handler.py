@@ -34,14 +34,20 @@ class RepoSearchHandler(HandlerV2):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string", "enum": ["storage", "external"]},
-                    "external_root": {"type": "string"},
-                    "root": {"type": "string", "description": "Repository path relative to the configured location; usually '.'."},
+                    "external_root": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
+                    },
+                    "root": {"type": "string", "description": "Repository path relative to the selected root; usually '.'."},
                     "query": {"type": "string", "description": "Concept or behavior to locate."},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 50},
                     "include_tests": {"type": "boolean"},
                 },
-                "required": ["location", "external_root", "root", "query", "limit", "include_tests"],
+                "required": [ "external_root", "root", "query", "limit", "include_tests"],
                 "additionalProperties": False,
             },
             "strict": True,
@@ -68,3 +74,4 @@ class RepoSearchHandler(HandlerV2):
         results = RepositoryIndex(root).search(query, limit=limit, include_tests=include_tests)
         return {"ok": True, "tool": self.NAME, "query": query, "include_tests": include_tests,
                 "count": len(results), "results": results}
+

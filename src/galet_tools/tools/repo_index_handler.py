@@ -35,14 +35,20 @@ class RepoIndexHandler(HandlerV2):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string", "enum": ["storage", "external"]},
-                    "external_root": {"type": "string"},
-                    "root": {"type": "string", "description": "Repository path relative to the configured location; usually '.'."},
+                    "external_root": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
+                    },
+                    "root": {"type": "string", "description": "Repository path relative to the selected root; usually '.'."},
                     "operation": {"type": "string", "enum": ["symbol", "lookup", "map"]},
                     "query": {"type": "string", "description": "Symbol or path for symbol/lookup; use '' for map."},
                     "include_tests": {"type": "boolean", "description": "Include tests in symbol/map results."},
                 },
-                "required": ["location", "external_root", "root", "operation", "query", "include_tests"],
+                "required": [ "external_root", "root", "operation", "query", "include_tests"],
                 "additionalProperties": False,
             },
             "strict": True,
@@ -76,3 +82,4 @@ class RepoIndexHandler(HandlerV2):
             return {"ok": False, "tool": self.NAME, "error": f"Unknown operation '{operation}'"}
         return {"ok": True, "tool": self.NAME, "operation": operation, "query": query,
                 "include_tests": include_tests, "count": len(results), "results": results}
+

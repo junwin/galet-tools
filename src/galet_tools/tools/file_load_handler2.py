@@ -29,25 +29,24 @@ class FileLoadHandler2(HandlerV2):
             "type": "function",
             "name": cls.NAME,
             "description": (
-                "Read all or part of a text file. Paths are relative to a configured "
-                "storage or named external root. Use start_line and line_count for "
+                "Read all or part of a text file. Paths are relative to the "
+                "configured root selected by external_root. Use start_line and line_count for "
                 "targeted reads; use null for both to read the whole file."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {
-                        "type": "string",
-                        "enum": ["storage", "external"],
-                        "description": "Where to load from.",
-                    },
                     "external_root": {
                         "type": "string",
-                        "description": "Named external root key when location='external'. Use '' otherwise.",
+                        "minLength": 1,
+                        "description": (
+                            "Exact configured root name. Names are arbitrary and case-sensitive; "
+                            "no namespace or account is added automatically."
+                        ),
                     },
                     "path": {
                         "type": "string",
-                        "description": "Relative path under the chosen location (no leading /, no ..).",
+                        "description": "Relative path under the selected root (no leading /, no ..).",
                     },
                     "start_line": {
                         "type": ["integer", "null"],
@@ -69,7 +68,6 @@ class FileLoadHandler2(HandlerV2):
                     },
                 },
                 "required": [
-                    "location",
                     "external_root",
                     "path",
                     "start_line",
@@ -115,7 +113,7 @@ class FileLoadHandler2(HandlerV2):
         **context: Any,
     ) -> Dict[str, Any]:
         path_in = (args.get("path") or args.get("relative_path") or "").strip()
-        location = (args.get("location") or "storage").strip().lower()
+        location = (args.get("location") or ("external" if args.get("external_root") else "storage")).strip().lower()
         external_root = (args.get("external_root") or "").strip()
         start_line = args.get("start_line")
         line_count = args.get("line_count")
@@ -257,7 +255,7 @@ class FileLoadHandler2(HandlerV2):
         if isinstance(args, dict):
             if not args.get("path") and args.get("relative_path"):
                 args["path"] = args.get("relative_path")
-            args.setdefault("location", "storage")
+            args.setdefault("location", "external" if args.get("external_root") else "storage")
             args.setdefault("external_root", "")
             args.setdefault("start_line", None)
             args.setdefault("line_count", None)
@@ -388,3 +386,4 @@ class FileLoadHandler2(HandlerV2):
             total_lines,
             end_index < total_lines,
         )
+

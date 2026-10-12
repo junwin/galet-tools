@@ -16,7 +16,9 @@
     "repo_lucy": "/home/junwin/src/repos/lucy",
     "repos": "/home/junwin/src/repos",
     "obsidian": "/home/junwin/Documents/mynotes",
-    "pi_share": "/home/junwin/pishare"
+    "pi_share": "/home/junwin/pishare",
+    "lucy_data_files": "/home/junwin/lucy_storage",
+    "sandbox": "/home/junwin/sandbox"
   },
   "sandbox_root": "/home/junwin/sandbox",
   "host": "127.0.0.1",
@@ -30,3 +32,4 @@
     "context_resolution": "most_specific"
   }
 }
+

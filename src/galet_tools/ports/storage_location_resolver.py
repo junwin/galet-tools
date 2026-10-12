@@ -4,11 +4,13 @@ from typing import Protocol
 
 
 class StorageLocationResolver(Protocol):
-    """Resolves named file locations to absolute base directories.
+    """Resolve arbitrary configured root names to absolute base directories.
 
-    The surface covers only what the file tools read: the storage base formed
-    from the storage root path plus the storage namespace, and named external
-    roots from the external_roots map.
+    Named-root calls use external_root_dir only. Hosts supply their effective
+    configuration, including any global/local overrides. A root name has no
+    special meaning: callers append namespace/account segments when needed.
+    storage_base_dir remains for legacy location='storage' calls and internal
+    consumers that explicitly request a storage namespace.
     """
 
     def storage_base_dir(self) -> str:
@@ -21,6 +23,9 @@ class StorageLocationResolver(Protocol):
     def external_root_dir(self, name: str) -> str:
         """Return the absolute directory for the named external root (external_roots[name]).
 
+        Do not infer behavior from the name or append account/namespace paths.
+
         Raises ValueError when external_roots is not a map or the name is unknown.
         """
         ...
+
