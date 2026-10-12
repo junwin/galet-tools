@@ -110,6 +110,36 @@ loaded, does not resolve to a callable, or fails during registration raises
 intentionally fail-fast so a host cannot start with an unexpectedly incomplete
 tool set.
 
+## Applying a single-file patch
+
+`patch_apply` wraps `git apply` and requires Git on PATH, but the selected
+root does not need to be a Git repository. `path` is relative to that root:
+with `location="external"` and `external_root="repos"`, a file in a repository
+may have `path="image_description/src/image_description/image/prompts.py"`.
+Keep that full root-relative path throughout validation and application.
+
+Supply a numbered unified diff. Both Git-style `a/` and `b/` header prefixes
+and prefix-free headers are accepted. For `path="repo/file.txt"`, for example:
+
+```diff
+--- a/repo/file.txt
++++ b/repo/file.txt
+@@ -1 +1 @@
+-old
++new
+```
+
+Alternatively use `--- repo/file.txt` and `+++ repo/file.txt`. The handler
+selects `-p1` or `-p0` only when Git reports exactly the requested file, then
+uses that same setting for checking and applying. It does not retry another
+setting after a content-check failure. Results report `strip_components`;
+path inspection failures include `path_attempts` and Git diagnostics.
+
+Use `check_only=true` first to validate without writing, then submit the same
+patch with `check_only=false` to apply it. `*** Begin Patch` syntax is not
+supported. Wrong-file, multi-file, binary, and escaping-path patches remain
+rejected. Correct malformed hunk counts or headers rather than shortening `path`.
+
 ## Memory tools example
 
 The `episodic_memory` handler takes an injected episodic store, and
@@ -294,4 +324,5 @@ address. Remote access needs a separate reverse-proxy design.
 ## License
 
 MIT — see `LICENSE`.
+
 
