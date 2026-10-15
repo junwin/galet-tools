@@ -37,19 +37,12 @@ The server exposes `tools/list` and `tools/call` at
 galet-tools-smoke list
 ```
 
-## Lineage
+## Background
 
-This package is extracted from the Lucy monorepo (`src/handlers`) as described
-in the Lucy design doc `software/ai/lucy/design/handlers-extraction.md` and
-the plan `software/ai/lucy/plan/handlers-extraction.md`.
-
-It is a fresh repository with no shared git history. Handler logic moves
-verbatim; the only intentional changes are the import namespace
-(`src.handlers.*` -> `galet_tools.*`) and the configuration boundary: tools
-depend on narrow port interfaces owned by this package (`ConfigProvider`,
-`StorageLocationResolver`, `SandboxRootResolver`, `SecurityPolicy`, ...),
-never on Lucy's `ConfigManager`. Lucy implements those ports at its
-composition root.
+The tools depend on narrow port interfaces owned by this package
+(`ConfigProvider`, `StorageLocationResolver`, `SandboxRootResolver`,
+`SecurityPolicy`, ...), never on host configuration code. A host application
+implements those ports at its composition root.
 
 ## Features
 
@@ -68,7 +61,17 @@ composition root.
 
 ## Quick start
 
+As a library, install from PyPI:
+
 ```bash
+pip install galet-tools
+```
+
+From source:
+
+```bash
+git clone https://github.com/junwin/galet-tools.git
+cd galet-tools
 python -m venv .venv
 .venv/bin/pip install -e .
 ```
@@ -159,9 +162,8 @@ by the host's effective configuration. For example:
 The resolver maps only the name to its configured directory. It does not infer
 special behavior from aliases such as `sandbox`, `storage`, or `lucy_data_files`,
 and it does not append account or namespace segments. Callers include those
-segments explicitly when needed. In Lucy, the host supplies the effective
-mapping after global/local configuration overrides; galet-tools does not load
-Lucy's configuration itself.
+segments explicitly when needed. The host supplies the effective mapping after global/local configuration
+overrides; galet-tools does not load host configuration itself.
 
 `path` (file/patch), `root` (repository), and `working_directory` (command) stay
 relative to the selected directory. `.` selects the directory itself for
@@ -221,7 +223,7 @@ constructs them when explicitly allowlisted. Curation/reset/semantic tools still
 require application services and are not exposed by the generic MCP server.
 
 See [memory tools](docs/memory-tools.md) for procedural operations, correlation
-invalidation, configuration pointing at Lucy storage, and Inspector/smoke tests.
+invalidation, storage configuration, and Inspector/smoke tests.
 
 Run a small SQLite session through creation, event append and read, digest
 preview, archive, an active-session read, and an idempotent
@@ -234,10 +236,6 @@ embedding and index ports without an API key:
 python -m pip install -e '.[memory]'
 python examples/curate_chat.py
 ```
-
-The memory extra pins galet-memory PR #33’s merge commit until the coordinated
-release. This is a breaking episodic API/storage change; use fresh storage.
-Lucy and galet-prompt-builder still require consumer updates before deployment.
 
 The example uses a deterministic digest generator and runs all four tool adapters
 with one temporary session. The example explicitly writes the digest text,
