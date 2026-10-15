@@ -2,6 +2,41 @@
 
 Self-contained generic tool handlers and the handler framework they run on.
 
+## Install
+
+Install from PyPI:
+
+```bash
+pip install galet-tools
+```
+
+Optional extras: `galet-tools[mcp]` for the MCP server,
+`galet-tools[memory]` for the memory tools, `galet-tools[video]` for
+video generation.
+
+### Quick sample: start the MCP server
+
+```bash
+pip install "galet-tools[mcp]"
+mkdir -p /tmp/galet-mcp/storage /tmp/galet-mcp/sandbox
+cat > galet-mcp.json <<'EOF'
+{
+  "account": "demo",
+  "storage_root": "/tmp/galet-mcp/storage",
+  "storage_namespace": "demo",
+  "sandbox_root": "/tmp/galet-mcp/sandbox"
+}
+EOF
+galet-tools-mcp
+```
+
+The server exposes `tools/list` and `tools/call` at
+`http://127.0.0.1:8765/mcp`. Smoke-test it from a second shell:
+
+```bash
+galet-tools-smoke list
+```
+
 ## Lineage
 
 This package is extracted from the Lucy monorepo (`src/handlers`) as described
