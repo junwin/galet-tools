@@ -329,3 +329,23 @@ def test_prefix_free_symlink_escape_is_rejected(tmp_path):
     assert result["error"] == "path escapes the configured root"
     assert (outside / "file.txt").read_text() == "old\n"
 
+
+
+def test_zero_context_interior_edit_returns_actionable_error(tmp_path):
+    target=tmp_path/'hello.txt';target.write_text('before\nold\nafter\n')
+    patch='--- a/hello.txt\n+++ b/hello.txt\n@@ -2 +2 @@\n-old\n+new\n'
+    result=_handler_for(tmp_path).execute(_args('hello.txt',patch))
+    assert result['error_code']=='zero_context_hunk'
+    assert 'text_replace' in result['details']
+    assert result['stderr']
+    assert target.read_text()=='before\nold\nafter\n'
+
+
+def test_malformed_count_keeps_git_diagnostics(tmp_path):
+    target=tmp_path/'hello.txt';target.write_text('before\nold\nafter\n')
+    patch='--- a/hello.txt\n+++ b/hello.txt\n@@ -1,5 +1,6 @@\n before\n-old\n+new\n after\n'
+    result=_handler_for(tmp_path).execute(_args('hello.txt',patch))
+    assert result['error_code']=='malformed_patch'
+    assert result['stderr']
+    assert result['path_attempts']
+    assert target.read_text()=='before\nold\nafter\n'

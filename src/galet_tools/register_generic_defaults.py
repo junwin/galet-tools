@@ -8,6 +8,7 @@ from galet_tools.tools.file_save_handler import FileSaveHandler2
 from galet_tools.tools.image_generate_handler import ImageGenerateHandler
 from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
 from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
+from galet_tools.tools.text_replace_handler import TextReplaceHandler
 from galet_tools.tools.repo_index_handler import RepoIndexHandler
 from galet_tools.tools.repo_search_handler import RepoSearchHandler
 from galet_tools.tools.video_generate_handler import VideoGenerateHandler
@@ -20,6 +21,7 @@ def register_generic_defaults(reg: HandlerRegistry) -> None:
     reg.register(FileLoadHandler2)
     reg.register(FileSaveHandler2)
     reg.register(PatchApplyHandler2)
+    reg.register(TextReplaceHandler)
     reg.register(CommandExecutionHandler2)
     reg.register(ExecuteCommand2)
     reg.register(RepoSearchHandler)
