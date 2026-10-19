@@ -42,10 +42,10 @@ class PatchApplyHandler2(HandlerV2):
             "description": (
                 "Validate or apply a unified-diff patch to exactly one file. "
                 "Keep path relative to the selected root, including any repository directory. "
-                "Use numbered unified-diff hunks and either a/path + b/path headers "
+                "For small exact edits prefer text_replace. Use numbered unified-diff hunks with unchanged context lines, and either a/path + b/path headers "
                 "or prefix-free path headers. Do not use *** Begin Patch syntax. "
                 "Example for path='repo/file.txt': "
-                "--- a/repo/file.txt\n+++ b/repo/file.txt\n@@ -1 +1 @@\n-old\n+new\n"
+                "--- a/repo/file.txt\n+++ b/repo/file.txt\n@@ -1,3 +1,3 @@\n before\n-old\n+new\n after\n"
                 "Use check_only=true to validate before applying."
             ),
             "parameters": {
@@ -377,6 +377,7 @@ class PatchApplyHandler2(HandlerV2):
                     location=location,
                     external_root=external_root,
                     path=normalized_path,
+                    error_code="path_mismatch" if inspected else "malformed_patch",
                     affected_paths=diagnostic["affected_paths"],
                     path_attempts=path_attempts,
                     stdout=diagnostic["stdout"],
@@ -394,8 +395,16 @@ class PatchApplyHandler2(HandlerV2):
                 timeout=_GIT_TIMEOUT_SECONDS,
             )
             if checked.returncode != 0:
+                # Git accepts some complete-file replacements without context;
+                # preserve those, but explain failed zero-context hunks precisely.
+                hunks = re.split(r"^@@[^\n]*\n", patch_content, flags=re.M)[1:]
+                zero_context = any(not any(line.startswith(" ") for line in hunk.splitlines()) for hunk in hunks)
                 return self._invalid(
                     "git apply --check failed",
+                    error_code="zero_context_hunk" if zero_context else "patch_context_mismatch",
+                    details=("A hunk has no unchanged context lines. Rebuild it from the current file with surrounding context, "
+                             "or use text_replace for a unique exact replacement. Do not guess hunk counts or shorten path."
+                             if zero_context else "Patch context does not match the current file. Reread the affected region before retrying."),
                     location=location,
                     external_root=external_root,
                     path=normalized_path,

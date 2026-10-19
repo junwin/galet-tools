@@ -395,3 +395,22 @@ address. Remote access needs a separate reverse-proxy design.
 MIT — see `LICENSE`.
 
 
+
+
+### Reliable small edits
+
+Use `text_replace` with `external_root`, `path`, `old_text`, `new_text` and
+`check_only` for exact edits to an existing UTF-8 file. The old text must occur
+exactly once, including whitespace. It rejects ambiguous/absent matches, binary
+files, symlinks and root escapes. It preserves line endings and permissions,
+checks the source again before replacement and returns a diff limited to 4000
+characters. Files/results are capped at 4 MiB; edit strings at 1 MiB each.
+Use `check_only=true` to preview without writing. Use more unique surrounding
+text if there are multiple matches; do not switch to an unguarded whole-file save.
+
+For larger changes use `patch_apply` with numbered unified-diff hunks and
+unchanged context lines. Failed context-free interior hunks report
+`zero_context_hunk`; malformed patches report `malformed_patch` with Git stderr.
+Valid full-file patches that Git accepts still work. Neither check nor apply
+uses `--unidiff-zero`. Reread a narrow affected region after a mismatch instead
+of repeatedly guessing line numbers/counts. These tools do not commit changes.

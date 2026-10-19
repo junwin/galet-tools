@@ -18,6 +18,7 @@ EXPECTED_NAMES = [
     "image_generate",
     "generate_svg",
     "patch_apply",
+    "text_replace",
     "repo_index",
     "repo_search",
     "video_generate",
@@ -32,6 +33,7 @@ PROPERTY_KEYS = {
         "include_line_numbers",
     },
     "file_save": {"external_root", "path", "file_content", "overwrite"},
+    "text_replace": {"external_root", "path", "old_text", "new_text", "check_only"},
     "patch_apply": {
         "external_root",
         "path",

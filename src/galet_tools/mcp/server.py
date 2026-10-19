@@ -30,6 +30,7 @@ from galet_tools.tools.image_generate_handler import ImageGenerateHandler
 from galet_tools.tools.video_generate_handler import VideoGenerateHandler
 from galet_tools.tools.generate_svg_handler import GenerateSvgHandler
 from galet_tools.tools.patch_apply_handler import PatchApplyHandler2
+from galet_tools.tools.text_replace_handler import TextReplaceHandler
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "file_load": FileLoadHandler2(storage),
         "file_save": FileSaveHandler2(storage),
         "patch_apply": PatchApplyHandler2(storage),
+        "text_replace": TextReplaceHandler(storage),
         "execute_command": CommandExecutionHandler2(storage, sandbox, security),
         "execute_command2": ExecuteCommand2(storage, sandbox, security),
         "generate_svg": GenerateSvgHandler(),
