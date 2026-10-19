@@ -115,7 +115,7 @@ class TextReplaceHandler(HandlerV2):
                 temporary = stream.name
                 stream.write(encoded)
                 stream.flush()
-                os.fchmod(stream.fileno(), mode)
+            os.chmod(temporary, mode)
             # Fail closed if the source changed during preparation.
             if target.is_symlink() or not target.resolve().is_relative_to(base) or target.read_bytes() != original:
                 return fail("source_changed", "File changed during edit; reread and retry")
