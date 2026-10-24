@@ -21,6 +21,7 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
     """Generate an image-based video with caller-selected provider settings."""
 
     NAME = "video_generate"
+    DEFAULT_MODEL = "gemini-omni-1.1-flash"
 
     def __init__(
         self,
@@ -29,6 +30,7 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
     ) -> None:
         self._storage_resolver = storage_resolver
         self._video_api = video_api
+        self._provider_apis: Dict[str, Any] = {}
 
     @classmethod
     def name(cls) -> str:
@@ -41,7 +43,8 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
             "name": cls.NAME,
             "description": (
                 "Generate a short video from an image uploaded to the current account. "
-                "Choose the source and model explicitly when requested. Defaults produce "
+                "Use Google Omni (gemini-omni-1.1-flash) by default. "
+                "Explicit veo-* models use the legacy Veo adapter. Defaults produce "
                 "a silent portrait reel with the subject and garments preserved."
             ),
             "parameters": {
@@ -57,8 +60,9 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
                     },
                     "duration_seconds": {
                         "type": "integer",
-                        "enum": [4, 6, 8],
-                        "description": "Generated reel duration. Prefer 4 seconds for garment fidelity.",
+                        "minimum": 3,
+                        "maximum": 10,
+                        "description": "Omni: integer 3–10 seconds. Legacy Veo: 4, 6, or 8 seconds.",
                     },
                     "source": {
                         "type": "string",
@@ -69,8 +73,12 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
                     "model": {
                         "type": "string",
                         "minLength": 1,
-                        "default": "veo-3.1-fast-generate-preview",
-                        "description": "Provider model ID; defaults to veo-3.1-fast-generate-preview.",
+                        "default": cls.DEFAULT_MODEL,
+                        "description": (
+                            "Google video model ID; defaults to gemini-omni-1.1-flash. "
+                            "Supports gemini-omni-* and legacy veo-* models. "
+                            "Veo 3.1 preview endpoints are retired in the Gemini API."
+                        ),
                     },
                     "aspect_ratio": {
                         "type": "string",
@@ -80,9 +88,12 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
                     },
                     "resolution": {
                         "type": "string",
-                        "enum": ["720p", "1080p", "4k"],
+                        "enum": ["360p", "720p", "1080p", "4k"],
                         "default": "720p",
-                        "description": "Output resolution. 1080p and 4k require 8 seconds.",
+                        "description": (
+                            "Omni: 360p, 720p, 1080p, or 4k. Legacy Veo: no 360p; "
+                            "1080p and 4k require 8 seconds for Veo only."
+                        ),
                     },
                     "preserve_subject": {
                         "type": "boolean",
@@ -136,18 +147,27 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
             "additionalProperties": True,
         }
 
-    def _get_video_api(self, source: str) -> Any:
+    def _get_video_api(self, source: str, model: str) -> Any:
         if source != "google":
             raise ValueError(f"unsupported video source: {source}; currently only google is supported")
-        if self._video_api is None:
+        if self._video_api is not None:
+            return self._video_api
+        family = "omni" if model.startswith("gemini-omni-") else "veo"
+        if family not in self._provider_apis:
             try:
-                from galet.gemini_videogen import GeminiVideoGenApi
+                if family == "omni":
+                    from galet.gemini_omni_videogen import GeminiOmniVideoGenApi
+                    api = GeminiOmniVideoGenApi()
+                else:
+                    from galet.gemini_videogen import GeminiVideoGenApi
+                    api = GeminiVideoGenApi()
             except ImportError as exc:
                 raise RuntimeError(
-                    "video_generate requires Galet with video support installed"
+                    'video_generate requires Galet with Omni support; '
+                    'install or upgrade "galet-tools[video]" (galet[gemini]>=0.1.25)'
                 ) from exc
-            self._video_api = GeminiVideoGenApi()
-        return self._video_api
+            self._provider_apis[family] = api
+        return self._provider_apis[family]
 
     @staticmethod
     def _remove_audio(ffmpeg: str, source: Path, destination: Path) -> None:
@@ -178,11 +198,9 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
             duration = args.get("duration_seconds")
             if not prompt:
                 raise ValueError("prompt is required")
-            if type(duration) is not int or duration not in {4, 6, 8}:
-                raise ValueError("duration_seconds must be 4, 6, or 8")
 
             source = args.get("source", "google")
-            model = args.get("model", "veo-3.1-fast-generate-preview")
+            model = args.get("model", self.DEFAULT_MODEL)
             aspect_ratio = args.get("aspect_ratio", "9:16")
             resolution = args.get("resolution", "720p")
             preserve_subject = args.get("preserve_subject", True)
@@ -192,11 +210,20 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
             if not isinstance(model, str) or not model.strip():
                 raise ValueError("model must be a non-empty provider model ID")
             model = model.strip()
+            is_omni = model.startswith("gemini-omni-")
+            if not is_omni and not model.startswith("veo-"):
+                raise ValueError("model must be a gemini-omni-* or legacy veo-* video model")
+            if is_omni:
+                if type(duration) is not int or not 3 <= duration <= 10:
+                    raise ValueError("duration_seconds must be an integer between 3 and 10 for Omni")
+            elif type(duration) is not int or duration not in {4, 6, 8}:
+                raise ValueError("duration_seconds must be 4, 6, or 8 for Veo")
             if aspect_ratio not in ("9:16", "16:9"):
                 raise ValueError("aspect_ratio must be 9:16 or 16:9")
-            if resolution not in ("720p", "1080p", "4k"):
-                raise ValueError("resolution must be 720p, 1080p, or 4k")
-            if resolution in ("1080p", "4k") and duration != 8:
+            resolutions = ("360p", "720p", "1080p", "4k") if is_omni else ("720p", "1080p", "4k")
+            if resolution not in resolutions:
+                raise ValueError(f"resolution must be one of {', '.join(resolutions)}")
+            if not is_omni and resolution in ("1080p", "4k") and duration != 8:
                 raise ValueError("1080p and 4k generation require an 8-second duration")
             if not isinstance(preserve_subject, bool) or not isinstance(add_sound, bool):
                 raise ValueError("preserve_subject and add_sound must be booleans")
@@ -214,7 +241,7 @@ class VideoGenerateHandler(UploadedImageResolver, HandlerV2):
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = self._contained_path(output_dir, f"{video_id}.mp4")
 
-            api = self._get_video_api(source)
+            api = self._get_video_api(source, model)
             response = api.generate_video(
                 model=model,
                 prompt=prompt,

@@ -82,7 +82,7 @@ def test_generates_video_from_uploaded_account_image(tmp_path, monkeypatch) -> N
     assert result["ok"] is True
     assert result["tool"] == "video_generate"
     assert result["duration_seconds"] == 4
-    assert result["model"] == "veo-3.1-fast-generate-preview"
+    assert result["model"] == "gemini-omni-1.1-flash"
     assert result["source"] == "google"
     assert result["add_sound"] is False
     assert mute_calls == [("ffmpeg", "provider.mp4", "silent.mp4")]
@@ -131,13 +131,13 @@ def test_rejects_invalid_duration_before_generation(tmp_path) -> None:
         {
             "image_id": image_id,
             "prompt": "Turn",
-            "duration_seconds": 5,
+            "duration_seconds": 11,
         },
         account_name="arla",
     )
 
     assert result["ok"] is False
-    assert "4, 6, or 8" in result["error"]
+    assert "between 3 and 10" in result["error"]
     assert api.generate_kwargs is None
 
 
@@ -152,8 +152,12 @@ def test_tool_schema_prefers_uploaded_image_id() -> None:
     ]
     assert tool_def["strict"] is False  # Defaults can be omitted.
     properties = tool_def["parameters"]["properties"]
+    assert properties["duration_seconds"]["minimum"] == 3
+    assert properties["duration_seconds"]["maximum"] == 10
+    assert "360p" in properties["resolution"]["enum"]
+    assert "Omni" in tool_def["description"]
     assert properties["source"]["default"] == "google"
-    assert properties["model"]["default"] == "veo-3.1-fast-generate-preview"
+    assert properties["model"]["default"] == "gemini-omni-1.1-flash"
     assert properties["aspect_ratio"]["default"] == "9:16"
     assert properties["resolution"]["default"] == "720p"
     assert properties["preserve_subject"]["default"] is True
@@ -185,10 +189,14 @@ def test_forwards_explicit_settings_and_retains_audio(tmp_path, monkeypatch) -> 
     ({"source": None}, "source must be google"),
     ({"model": " "}, "model must be"),
     ({"model": None}, "model must be"),
+    ({"model": "gemini-chat"}, "model must be"),
+    ({"model": "veo-legacy", "duration_seconds": 5}, "4, 6, or 8"),
+    ({"model": "veo-legacy", "resolution": "360p"}, "resolution must be"),
+    ({"duration_seconds": 2}, "duration_seconds"),
     ({"aspect_ratio": "1:1"}, "aspect_ratio must be"),
     ({"resolution": "480p"}, "resolution must be"),
-    ({"resolution": "1080p"}, "8-second duration"),
-    ({"resolution": "4k"}, "8-second duration"),
+    ({"model": "veo-legacy", "resolution": "1080p"}, "8-second duration"),
+    ({"model": "veo-legacy", "resolution": "4k"}, "8-second duration"),
     ({"preserve_subject": "false"}, "must be booleans"),
     ({"add_sound": "false"}, "must be booleans"),
     ({"duration_seconds": True}, "duration_seconds"),
@@ -266,3 +274,44 @@ def test_real_mp4_audio_policy(tmp_path, add_sound) -> None:
                               check=True, capture_output=True, timeout=30).stdout
 
     assert video_hash(output) == video_hash(original)
+
+
+@pytest.mark.parametrize("duration,resolution", [(3, "360p"), (5, "1080p"), (10, "4k")])
+def test_omni_duration_and_resolution_options(tmp_path, duration, resolution):
+    image_id = _uploaded_image(tmp_path)
+    api = _VideoApi()
+    handler = VideoGenerateHandler(_Resolver(tmp_path), video_api=api)
+    result = handler.execute({
+        "image_id": image_id, "prompt": "Turn", "duration_seconds": duration,
+        "resolution": resolution, "add_sound": True,
+    }, account_name="arla")
+    assert result["ok"] is True
+    assert api.generate_kwargs["model"] == "gemini-omni-1.1-flash"
+    assert api.generate_kwargs["duration_seconds"] == duration
+    assert api.generate_kwargs["resolution"] == resolution
+
+
+def test_selects_and_caches_the_correct_galet_adapter(tmp_path, monkeypatch):
+    import sys
+    from types import ModuleType
+    omni_module = ModuleType("galet.gemini_omni_videogen")
+    veo_module = ModuleType("galet.gemini_videogen")
+    omni, veo = _VideoApi(), _VideoApi()
+    omni_module.GeminiOmniVideoGenApi = lambda: omni
+    veo_module.GeminiVideoGenApi = lambda: veo
+    monkeypatch.setitem(sys.modules, "galet.gemini_omni_videogen", omni_module)
+    monkeypatch.setitem(sys.modules, "galet.gemini_videogen", veo_module)
+    image_id = _uploaded_image(tmp_path)
+    handler = VideoGenerateHandler(_Resolver(tmp_path))
+    for model, api in [
+        ("gemini-omni-1.1-flash", omni), ("veo-legacy", veo),
+        ("gemini-omni-1.1-flash", omni),
+    ]:
+        result = handler.execute({
+            "image_id": image_id, "prompt": "Turn", "duration_seconds": 4,
+            "model": model, "add_sound": True,
+        }, account_name="arla")
+        assert result["ok"] is True
+        assert api.generate_kwargs["model"] == model
+    assert handler._get_video_api("google", "veo-legacy") is veo
+    assert handler._get_video_api("google", "gemini-omni-1.1-flash") is omni
