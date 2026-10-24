@@ -248,15 +248,15 @@ and construct `CurateChatHandler(service)` through a registry factory.
 ## Video generation
 
 `video_generate` accepts an uploaded `image_id`, a motion `prompt`, and
-`duration_seconds` (4, 6, or 8). These three arguments are required. The
-following arguments can be supplied for each request or omitted to use defaults:
+`duration_seconds` (integer 3–10 for Omni; 4, 6, or 8 for legacy Veo). These three
+arguments are required. The following arguments can be supplied for each request or omitted to use defaults:
 
 | Argument | Default | Supported values |
 | --- | --- | --- |
 | `source` | `google` | Currently Google only; other providers fail explicitly |
-| `model` | `veo-3.1-fast-generate-preview` | Google video model ID |
+| `model` | `gemini-omni-1.1-flash` | `gemini-omni-*` or explicit legacy `veo-*` model ID |
 | `aspect_ratio` | `9:16` | `9:16`, `16:9` |
-| `resolution` | `720p` | `720p`, `1080p`, `4k`; the latter two require 8 seconds |
+| `resolution` | `720p` | Omni: `360p`, `720p`, `1080p`, `4k`; legacy Veo: no `360p`, higher resolutions require 8 seconds |
 | `preserve_subject` | `true` | Boolean; adds identity/garment preservation instructions |
 | `add_sound` | `false` | Boolean; false removes audio, true retains provider audio |
 
@@ -268,7 +268,7 @@ Example tool arguments:
   "prompt": "One gentle step forward and a slight turn.",
   "duration_seconds": 4,
   "source": "google",
-  "model": "veo-3.1-fast-generate-preview",
+  "model": "gemini-omni-1.1-flash",
   "aspect_ratio": "9:16",
   "resolution": "720p",
   "preserve_subject": true,
@@ -276,8 +276,14 @@ Example tool arguments:
 }
 ```
 
-Install `galet-tools[video]` and Galet's Gemini SDK dependency (`galet[gemini]`)
-for Google generation. Silent output also requires **FFmpeg on the host PATH**
+Install or upgrade `galet-tools[video]`; this includes `galet[gemini]>=0.1.25`
+with the Omni adapter and required Google SDK. The handler selects the Omni
+Interactions adapter for `gemini-omni-*` and the legacy Veo adapter for `veo-*`.
+Google's Gemini API Veo 3.1 preview endpoints retired on October 22, 2026;
+use `gemini-omni-1.1-flash` for new requests. This handler still requires an
+uploaded image; Galet's prompt-only mode is not exposed here.
+
+Silent output also requires **FFmpeg on the host PATH**
 (e.g. `sudo apt install ffmpeg` on Debian/Ubuntu). The handler checks this before
 submitting a paid generation request. Google's Gemini Developer API does not
 accept the SDK's `generate_audio` setting, so silent output is implemented by
