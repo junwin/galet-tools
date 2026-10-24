@@ -23,7 +23,7 @@ classifiers = [
 
 [project.optional-dependencies]
 mcp = ["mcp==2.1.1"]
-video = ["galet[gemini]>=0.1.25"]
+video = ["galet[gemini]>=0.1.26"]
 memory = ["galet-memory>=0.1.25"]
 
 [project.scripts]
