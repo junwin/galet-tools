@@ -9,6 +9,7 @@ from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
 
 EXPECTED_NAMES = [
+    "semantic_memory",
     "episodic_memory",
     "procedural_memory",
     "execute_command",

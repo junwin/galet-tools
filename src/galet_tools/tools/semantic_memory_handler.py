@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from galet_memory.semantic import SemanticMemory, SemanticMemoryRequest
+if TYPE_CHECKING:
+    from galet_memory.semantic import SemanticMemory
 from galet_tools.framework.handler_v2 import HandlerV2
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,9 @@ class SemanticMemoryHandler(HandlerV2):
 
     NAME = "semantic_memory"
 
-    def __init__(self, memory: SemanticMemory, *, embedding_facade: Any = None) -> None:
+    def __init__(self, memory: SemanticMemory | None = None, *, embedding_facade: Any = None,
+                 embedding_model: str = "text-embedding-3-small") -> None:
+        self.embedding_model = embedding_model
         self.memory = memory
         self.embedding_facade = (
             embedding_facade if embedding_facade is not None
@@ -90,8 +93,8 @@ class SemanticMemoryHandler(HandlerV2):
                     "namespaces": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Embedding namespaces to search.",
-                        "default": ["external"],
+                        "description": "Namespaces to search; empty searches all namespaces for the account.",
+                        "default": [],
                     },
                     "top_k": {
                         "type": "integer",
@@ -110,8 +113,7 @@ class SemanticMemoryHandler(HandlerV2):
                     },
                     "embedding_model": {
                         "type": "string",
-                        "description": "Embedding model used for the query vector.",
-                        "default": "text-embedding-3-small",
+                        "description": "Query embedding model; omit to use the configured profile.",
                     },
                     "source_type": {
                         "type": "string",
@@ -119,20 +121,10 @@ class SemanticMemoryHandler(HandlerV2):
                         "default": "",
                     },
                 },
-                "required": [
-                    "action",
-                    "query",
-                    "account_name",
-                    "namespaces",
-                    "top_k",
-                    "max_chars",
-                    "score_threshold",
-                    "embedding_model",
-                    "source_type",
-                ],
+                "required": ["action"],
                 "additionalProperties": False,
             },
-            "strict": True,
+            "strict": False,
         }
 
     @classmethod
@@ -162,6 +154,7 @@ class SemanticMemoryHandler(HandlerV2):
         account_name: str = "auto",
         **context: Any,
     ) -> Dict[str, Any]:
+        memory = context.get("semantic_memory", self.memory)
         action = str(args.get("action") or "").strip().lower()
 
         allowed = ["recall", "embed", "compare", "rank", "models", "namespaces"]
@@ -195,10 +188,15 @@ class SemanticMemoryHandler(HandlerV2):
                     "error": "account_name is required",
                 }
 
-            namespaces_raw = args.get("namespaces") or ["external"]
+            from galet_memory.semantic import SemanticMemoryRequest
+
+            namespaces_raw = args.get("namespaces") or []
             namespaces: List[str] = [
                 str(value).strip() for value in namespaces_raw if str(value).strip()
-            ] or ["external"]
+            ]
+
+            if not namespaces and hasattr(memory, "list_namespaces"):
+                namespaces = list(memory.list_namespaces(resolved_account))
 
             request = SemanticMemoryRequest(
                 account_name=resolved_account,
@@ -209,13 +207,13 @@ class SemanticMemoryHandler(HandlerV2):
                 max_chars=max(1, int(args.get("max_chars", 9000))),
                 score_threshold=float(args.get("score_threshold", 0.25)),
                 embedding_model=str(
-                    args.get("embedding_model") or "text-embedding-3-small"
+                    args.get("embedding_model") or self.embedding_model
                 ).strip(),
                 source_type=(str(args.get("source_type") or "").strip() or None),
             )
 
             try:
-                result = self.memory.recall(request)
+                result = memory.recall(request)
             except Exception as exc:
                 logger.exception("semantic_memory recall failed")
                 return {
@@ -256,15 +254,15 @@ class SemanticMemoryHandler(HandlerV2):
         # --- embed -----------------------------------------------------------------
         if action == "embed":
             query = str(args.get("query") or "").strip()
-            model = str(args.get("embedding_model") or "text-embedding-3-small").strip()
+            model = str(args.get("embedding_model") or self.embedding_model).strip()
             texts = [query] if query else []
 
             if not texts:
                 return {"ok": False, "tool": self.NAME, "action": "embed", "error": "No texts provided"}
 
             try:
-                if hasattr(self.memory, "embed"):
-                    resp = self.memory.embed(texts, model=model)
+                if hasattr(memory, "embed"):
+                    resp = memory.embed(texts, model=model)
                 elif self.embedding_facade is not None:
                     resp = self.embedding_facade.embed(texts, model=model)
                 else:
@@ -282,8 +280,8 @@ class SemanticMemoryHandler(HandlerV2):
             model = str(args.get("embedding_model") or "").strip() or None
 
             try:
-                if hasattr(self.memory, "compare"):
-                    resp = self.memory.compare(a, b, model=model)
+                if hasattr(memory, "compare"):
+                    resp = memory.compare(a, b, model=model)
                 elif self.embedding_facade is not None:
                     resp = self.embedding_facade.compare(a, b, model=model)
                 else:
@@ -305,8 +303,8 @@ class SemanticMemoryHandler(HandlerV2):
             model = str(args.get("embedding_model") or "").strip() or None
 
             try:
-                if hasattr(self.memory, "rank"):
-                    resp = self.memory.rank(items, model=model)
+                if hasattr(memory, "rank"):
+                    resp = memory.rank(items, model=model)
                 elif self.embedding_facade is not None:
                     resp = self.embedding_facade.rank(items, model=model)
                 else:
@@ -320,8 +318,8 @@ class SemanticMemoryHandler(HandlerV2):
         # --- models ---------------------------------------------------------------
         if action == "models":
             try:
-                if hasattr(self.memory, "models"):
-                    resp = self.memory.models()
+                if hasattr(memory, "models"):
+                    resp = memory.models()
                 elif self.embedding_facade is not None and hasattr(
                     self.embedding_facade, "models"
                 ):
@@ -367,16 +365,18 @@ class SemanticMemoryHandler(HandlerV2):
                 }
 
             try:
-                if hasattr(self.memory, "list_namespaces"):
-                    namespaces = list(self.memory.list_namespaces(resolved_account))
-                elif hasattr(self.memory, "embedding_store") and hasattr(
-                    self.memory.embedding_store, "list_embedding_namespaces"
+                if hasattr(memory, "list_namespaces"):
+                    namespaces = list(memory.list_namespaces(resolved_account))
+                elif hasattr(memory, "embedding_store") and hasattr(
+                    memory.embedding_store, "list_embedding_namespaces"
                 ):
                     namespaces = list(
-                        self.memory.embedding_store.list_embedding_namespaces(
+                        memory.embedding_store.list_embedding_namespaces(
                             resolved_account
                         )
                     )
+                elif hasattr(memory, "index"):
+                    namespaces = list(memory.index.list_namespaces(resolved_account))
                 else:
                     return {
                         "ok": False,

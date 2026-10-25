@@ -22,7 +22,7 @@ from galet_tools.mcp.server import (
 def _config(tmp_path, **overrides):
     values = {
         "account": "junwin",
-        "allowlist": list(REGISTERED_TOOL_NAMES),
+        "allowlist": [n for n in REGISTERED_TOOL_NAMES if n != "semantic_memory"],
         "storage_root": str(tmp_path / "storage"),
         "storage_namespace": "galet",
         "external_roots": {},
@@ -41,7 +41,7 @@ def _write_config(tmp_path, **overrides):
         "storage_root": str(tmp_path / "storage"),
         "storage_namespace": "galet",
         "sandbox_root": str(tmp_path / "sandbox"),
-        "allowlist": list(REGISTERED_TOOL_NAMES),
+        "allowlist": [n for n in REGISTERED_TOOL_NAMES if n != "semantic_memory"],
     }
     data.update(overrides)
     path = tmp_path / "galet-mcp.json"

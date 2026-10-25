@@ -27,7 +27,7 @@ REGISTERED_TOOL_NAMES = (
 DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
 # Provider-backed media tools are available when explicitly allowed.
 REGISTERED_TOOL_NAMES += ("image_generate", "video_generate")
-REGISTERED_TOOL_NAMES += ("procedural_memory", "episodic_memory")
+REGISTERED_TOOL_NAMES += ("procedural_memory", "episodic_memory", "semantic_memory")
 
 
 class GaletConfigError(Exception):
@@ -47,6 +47,7 @@ class GaletConfig:
     host: str
     port: int
     fonts: list[str]
+    memory_config_path: Optional[str] = None
     episodic_memory_db_path: Optional[str] = None
     procedural_memory: dict[str, Any] = field(default_factory=dict)
 
@@ -158,6 +159,12 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         fail("key 'fonts' must be a list of font file path strings")
     fonts = [os.path.expanduser(x.strip()) for x in fonts_raw if x.strip()]
 
+    memory_config_path = raw.get("memory_config_path")
+    if memory_config_path is not None:
+        memory_config_path = abs_path(memory_config_path, "memory_config_path")
+    if "semantic_memory" in allowlist and memory_config_path is None:
+        fail("semantic_memory requires memory_config_path")
+
     episodic_path = raw.get("episodic_memory_db_path")
     if episodic_path is not None:
         episodic_path = abs_path(episodic_path, "episodic_memory_db_path")
@@ -195,6 +202,7 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
         host=host,
         port=port,
         fonts=fonts,
+        memory_config_path=memory_config_path,
         episodic_memory_db_path=episodic_path,
         procedural_memory=procedural,
     )
