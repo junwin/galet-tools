@@ -4,15 +4,40 @@ Self-contained generic tool handlers and the handler framework they run on.
 
 ## Install
 
-Install from PyPI:
+Requires Python 3.11 or later. On Linux/macOS, use one of the following
+setups. Both include the memory, MCP, and video extras, which install
+`galet-memory`, `galet`, and the MCP dependencies automatically.
+
+### Install the published package
 
 ```bash
-pip install galet-tools
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "galet-tools[memory,mcp,video]"
 ```
 
-Optional extras: `galet-tools[mcp]` for the MCP server,
-`galet-tools[memory]` for the memory tools, `galet-tools[video]` for
-video generation.
+### Install from source and run the tests
+
+```bash
+git clone --branch develop https://github.com/junwin/galet-tools.git
+cd galet-tools
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[memory,mcp,video]" pytest
+python -m pytest -q
+```
+
+If you already have a checkout, run the commands from `cd galet-tools`
+onward; reuse your existing `.venv` if present.
+
+The extras in brackets matter: plain `pip install -e .` installs only the
+base dependencies (Pillow and Pydantic). The tests import `galet` and
+`galet_memory` directly, so install the extras before running pytest.
+The `-e` option makes this checkout of `galet-tools` editable; its
+dependencies are installed from your configured package index.
+
+For a minimal library installation, use `python -m pip install galet-tools`.
+You can also select individual extras: `[memory]`, `[mcp]`, or `[video]`.
 
 ### Quick sample: start the MCP server
 
@@ -59,41 +84,18 @@ implements those ports at its composition root.
 - **Handler discovery** — installed packages can contribute handlers through
   Python package entry points without changing Lucy or galet-tools.
 
-## Quick start
-
-As a library, install from PyPI:
-
-```bash
-pip install galet-tools
-```
-
-From source:
-
-```bash
-git clone https://github.com/junwin/galet-tools.git
-cd galet-tools
-python -m venv .venv
-.venv/bin/pip install -e .
-```
-
-### Update the project and all dependencies
+## Update an existing source installation
 
 From the `galet-tools` directory, with your virtual environment active, run:
 
 ```bash
-python -m pip install --upgrade --upgrade-strategy eager -e '.[memory,mcp,video]'
-```
-
-This installs your local `galet-tools` in editable mode and upgrades its
-runtime dependencies, including `galet-memory` and `galet`, to the newest
-versions allowed by `pyproject.toml`. It includes the memory, MCP, and video
-extras; exact version pins remain in effect.
-
-Run the suite:
-
-```bash
+python -m pip install --upgrade --upgrade-strategy eager -e ".[memory,mcp,video]" pytest
 python -m pytest -q
 ```
+
+This refreshes the editable installation and upgrades dependencies to the
+newest versions allowed by `pyproject.toml`; exact version pins remain in effect.
+Update your checkout with Git first if you also want newer source code.
 
 ## Using the registry in a host
 
