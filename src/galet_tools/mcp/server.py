@@ -49,6 +49,9 @@ class McpScope:
     tool_names: frozenset
 
     def close(self) -> None:
+        semantic = self.handlers.get("semantic_memory")
+        if semantic is not None:
+            semantic.close()
         handler = self.handlers.get("episodic_memory")
         if handler is not None:
             handler.memory.close()
@@ -105,6 +108,14 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
             handlers["episodic_memory"] = EpisodicMemoryHandler(SqliteEpisodicMemory(
                 path, digests_root=base / "digests",
             ))
+    if "semantic_memory" in config.allowlist:
+        from galet_tools.mcp.semantic import build_semantic_handler
+        try:
+            handlers["semantic_memory"] = build_semantic_handler(config.memory_config_path)
+        except Exception as exc:
+            if "episodic_memory" in handlers:
+                handlers["episodic_memory"].memory.close()
+            raise GaletMcpError(f"cannot configure semantic memory: {exc}") from exc
     return handlers
 
 
@@ -149,7 +160,7 @@ def dispatch_call(
         return error_result(
             f"Tool '{name}' is advertised but not available in this server process."
         )
-    if name in ("procedural_memory", "episodic_memory"):
+    if name in ("procedural_memory", "episodic_memory", "semantic_memory"):
         requested_account = (arguments or {}).get("account_name")
         if requested_account and str(requested_account).strip() != scope.config.account:
             return error_result("account_name does not match the fixed MCP account")

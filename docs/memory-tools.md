@@ -1,4 +1,4 @@
-# Procedural and episodic tools
+# Memory tools
 
 Install the optional memory backend and MCP SDK from a galet-tools checkout:
 
@@ -6,12 +6,15 @@ Install the optional memory backend and MCP SDK from a galet-tools checkout:
 python -m pip install -U -e '.[memory,mcp]'
 ```
 
-The memory extra currently pins the immutable galet-memory PR #33 merge commit
-`1215486ccdb300c438e51b76ef0ec14355559708`. Its explicit API is not yet
-available under a new PyPI version. Replace this pin with the coordinated
-release requirement before publishing galet-tools. The handlers are also
-usable directly from Python, with a backend passed to their constructor or via
-`execute(..., procedural_memory=...)` / `execute(..., episodic_store=...)`.
+For semantic V3 support, install the current galet-memory checkout in the same
+virtual environment (the V3 configuration API is newer than the original 0.1.25
+release):
+
+```bash
+python -m pip install -e '../galet-memory[vec]'
+```
+
+Handlers are also usable directly from Python with injected backends.
 Generic registry factories leave memory backends to the host; MCP constructs
 them from its configuration. Base-package registration does not import
 `galet_memory`, and memory storage is opened only when a memory tool is allowed.
@@ -183,3 +186,86 @@ galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action
 Python and MCP calls share the same handler definitions and execution logic.
 MCP `isError` remains reserved for dispatch/execution failures; a structured
 handler result with `ok:false` is a normal tool result containing the failure.
+
+## Semantic recall against an existing V3 database
+
+Add `semantic_memory` to the MCP allowlist and set `memory_config_path` to an
+absolute path to a galet-memory config. Its semantic section selects the database,
+metadata version, embedding profile and authorized source roots. MCP uses only
+that semantic component; other components in the shared memory config are not
+opened. Existing procedural and episodic MCP options still configure those tools.
+The configured MCP account applies to recall and namespace listing.
+
+To test a migrated database, create separate test configs. For example, with the
+verified migration copy from the migration walkthrough:
+
+```bash
+export GALET_CREDENTIAL_PATH=/home/junwin/credential
+export MEMORY_MIGRATION_DIR=/tmp/memory-v3-migration-PdLyn1
+python - <<'PYCONFIG'
+import json
+import os
+from pathlib import Path
+
+workspace = Path(os.environ['MEMORY_MIGRATION_DIR'])
+original = Path('/home/junwin/src/repos/galet-memory/memory_config.json')
+memory = json.loads(original.read_text())
+# Absolute source paths keep any shared config file references valid after copying.
+for key in ('external_roots_file', 'embedding_profiles_file'):
+    if key in memory:
+        memory[key] = str((original.parent / memory[key]).resolve())
+if 'external_roots_file' in memory:
+    roots = json.loads(Path(memory.pop('external_roots_file')).read_text())['external_roots']
+    memory['external_roots'] = roots
+memory['external_roots']['migration_test'] = str(workspace)
+memory['external_roots']['obsidian'] = '/home/junwin/obsidian/test'
+semantic = memory['memory']['semantic']
+semantic['metadata_version'] = 3
+semantic['database'] = {
+    'external_root': 'migration_test',
+    'relative_path': 'migrated-v3-verified.sqlite',
+    'create': False,
+}
+memory_path = workspace / 'memory-mcp-test.json'
+mcp_path = workspace / 'galet-mcp-test.json'
+# Exclusive creation avoids replacing earlier test configurations.
+with memory_path.open('x') as output:
+    json.dump(memory, output, indent=2)
+with mcp_path.open('x') as output:
+    json.dump({
+        'account': 'junwin',
+        'allowlist': ['semantic_memory'],
+        'memory_config_path': str(memory_path),
+        'storage_root': str(workspace),
+        'storage_namespace': 'mcp',
+        'sandbox_root': str(workspace),
+        'host': '127.0.0.1',
+        'port': 8700,
+    }, output, indent=2)
+print(mcp_path)
+PYCONFIG
+
+galet-tools-mcp --config "$MEMORY_MIGRATION_DIR/galet-mcp-test.json"
+```
+
+In another terminal, list tools/namespaces and try a query whose answer you know
+is in `vol_7`:
+
+```bash
+galet-tools-smoke --url http://127.0.0.1:8700/mcp list
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call semantic_memory '{"action":"namespaces"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call semantic_memory '{"action":"recall","query":"your known vol_7 subject","namespaces":["vol_7"],"top_k":5}'
+```
+
+Omitting `namespaces` searches all namespaces belonging to the configured
+account. Omitting `embedding_model` uses the configured profile. Each vector
+recall makes a live query embedding request. Check `ok`, the returned documents,
+scores, source paths and `metadata.unavailable_resources`; an empty successful
+result is not evidence that the expected note was found. The smoke command
+prints handler failures as structured `ok:false` results even when the MCP
+transport succeeded.
+
+The semantic tool exposes recall and utilities, with no ingestion or deletion
+actions. This setup uses the verified copy and leaves Lucy's configuration and
+original database in place. It validates MCP/handler/memory integration; Lucy's
+own construction and prompt assembly still need a separate check.

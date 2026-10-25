@@ -16,7 +16,7 @@ def _config(tmp_path: Path) -> GaletConfig:
     root = Path(tmp_path)
     return GaletConfig(
         account="junwin",
-        allowlist=list(REGISTERED_TOOL_NAMES),
+        allowlist=[n for n in REGISTERED_TOOL_NAMES if n != "semantic_memory"],
         storage_root=str(root / "storage"),
         storage_namespace="galet",
         external_roots={},
@@ -110,9 +110,9 @@ def test_dispatch_execute_command_in_sandbox(tmp_path: Path) -> None:
 def test_resolve_startup_scope_default_allowlist_round_trip(tmp_path: Path) -> None:
     config = _config(tmp_path)
     scope, mcp_tools = resolve_startup_scope(config)
-    assert scope.tool_names == frozenset(REGISTERED_TOOL_NAMES)
+    assert scope.tool_names == frozenset(n for n in REGISTERED_TOOL_NAMES if n != "semantic_memory")
     advertised_names = {tool["name"] for tool in mcp_tools}
-    assert advertised_names == set(REGISTERED_TOOL_NAMES)
+    assert advertised_names == set(n for n in REGISTERED_TOOL_NAMES if n != "semantic_memory")
     save_result = dispatch_call(
         scope,
         "file_save",
