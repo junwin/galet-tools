@@ -269,3 +269,16 @@ The semantic tool exposes recall and utilities, with no ingestion or deletion
 actions. This setup uses the verified copy and leaves Lucy's configuration and
 original database in place. It validates MCP/handler/memory integration; Lucy's
 own construction and prompt assembly still need a separate check.
+
+### Diagnosing vector-to-keyword fallback
+
+Run `galet-tools-mcp --config galet-mcp.json --log-file /tmp/galet-mcp.log`
+to keep application logs while watching stderr. Startup reports the semantic
+schema version and provider/model/dimensions. Each call reports its ID, duration,
+outcome and recall backend. `backend=keyword` is logged at WARNING even if the
+handler returns `ok:true`.
+
+Install galet-memory's embedding-failure logging change too: it logs the original
+exception and traceback when query embedding fails, before attempting keyword
+fallback. This makes missing credentials, provider outages and other embedding
+errors visible in the MCP process. A vector recall reports `backend=vector`.

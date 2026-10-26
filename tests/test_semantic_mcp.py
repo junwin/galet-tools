@@ -149,3 +149,28 @@ def test_semantic_mcp_over_http(semantic_config, monkeypatch):
         listener.close()
     assert not thread.is_alive()
     assert not errors, errors
+
+
+def test_embedding_failure_is_logged_with_mcp_fallback_summary(semantic_config, caplog):
+    import logging
+
+    config, _, _ = semantic_config
+    caplog.set_level(logging.INFO)
+    scope, _ = resolve_startup_scope(config)
+
+    class Unavailable:
+        def embed(self, *args, **kwargs):
+            raise ConnectionError('embedding service unavailable')
+
+    try:
+        scope.handlers['semantic_memory'].memory.embeddings = Unavailable()
+        result = call(scope, {'action': 'recall', 'query': 'apples'})
+        assert result['metadata']['backend'] == 'keyword'
+        assert 'mcp_semantic_ready' in caplog.text
+        assert 'provider=test model=test-model dimensions=1536' in caplog.text
+        assert 'mcp_call_start' in caplog.text
+        assert 'backend=keyword reason=embedding_provider_unavailable' in caplog.text
+        assert 'duration_ms=' in caplog.text and 'call_id=' in caplog.text
+        assert 'apples' not in caplog.text
+    finally:
+        scope.close()

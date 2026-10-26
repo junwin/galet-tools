@@ -1,4 +1,5 @@
 """MCP semantic memory assembled from the shared galet-memory configuration."""
+import logging
 from dataclasses import replace
 
 from galet_tools.tools.semantic_memory_handler import SemanticMemoryHandler
@@ -26,4 +27,10 @@ def build_semantic_handler(path):
     # Other components are configured separately by MCP. Opening this tool must
     # not create or open the application's episodic, working or procedural stores.
     settings = replace(settings, episodic=None, procedural=None, working=None)
-    return ConfiguredSemanticHandler(build_memory(settings))
+    handler = ConfiguredSemanticHandler(build_memory(settings))
+    profile = settings.embedding_profiles[settings.semantic.embedding_profile]
+    logging.getLogger(__name__).info(
+        "mcp_semantic_ready config=%s metadata_version=%s provider=%s model=%s dimensions=%s",
+        path, settings.semantic.metadata_version, profile.provider, profile.model, profile.dimensions,
+    )
+    return handler
