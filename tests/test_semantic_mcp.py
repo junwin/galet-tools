@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -45,6 +46,32 @@ def semantic_config(tmp_path, monkeypatch):
     return load_config(config), note, path
 
 
+@pytest.fixture
+def all_memory_config(semantic_config):
+    config, note, path = semantic_config
+    raw = json.loads(path.read_text())
+    raw['memory'].update({
+        'episodic': {'database': {'external_root': 'data', 'relative_path': 'episodic.sqlite', 'create': True}},
+        'procedural': {'root': {'external_root': 'data', 'relative_path': '.'},
+            'context_resolution': 'most_specific', 'layout': {
+                'global_contexts': 'contexts', 'account_contexts': 'contexts/{account}',
+                'project_contexts': None, 'global_skills': 'skills',
+                'account_skills': 'skills/{account}', 'project_skills': None,
+            }},
+        'working': {'database': {'external_root': 'data', 'relative_path': 'working.sqlite', 'create': True}},
+    })
+    path.write_text(json.dumps(raw))
+    return replace(config, allowlist=['semantic_memory', 'episodic_memory', 'procedural_memory']), note, path
+
+
+def memory_call(scope, name, args):
+    result = dispatch_call(scope, name, args)
+    assert not result['isError'], result
+    payload = json.loads(result['content'][0]['text'])
+    assert payload['ok'], payload
+    return payload
+
+
 def call(scope, args):
     result = dispatch_call(scope, 'semantic_memory', args)
     assert not result['isError'], result
@@ -73,7 +100,7 @@ def test_v3_recall_through_mcp_uses_configured_model_roots_and_account(semantic_
         assert missing['metadata']['unavailable_resources']
     finally:
         scope.close()
-    assert scope.handlers['semantic_memory'].runtime._closed
+    assert scope.memory_runtime._closed
     assert not (note.parent.parent / 'missing.sqlite').exists()
 
 
@@ -96,7 +123,7 @@ def test_semantic_requires_absolute_config_path(tmp_path, memory_path):
         load_config(path)
 
 
-def test_semantic_mcp_over_http(semantic_config, monkeypatch):
+def test_semantic_mcp_over_http(all_memory_config, monkeypatch):
     import asyncio
     import socket
     import threading
@@ -105,7 +132,7 @@ def test_semantic_mcp_over_http(semantic_config, monkeypatch):
     import uvicorn
     from galet_tools.mcp import server, smoke
 
-    config, note, _ = semantic_config
+    config, note, _ = all_memory_config
     monkeypatch.setattr(server, 'load_config', lambda path: config)
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
@@ -134,7 +161,7 @@ def test_semantic_mcp_over_http(semantic_config, monkeypatch):
         assert not errors, errors
         assert servers and servers[0].started
         tools = asyncio.run(smoke._fetch_tools(url, 10))
-        assert [t.name for t in tools] == ['semantic_memory']
+        assert {t.name for t in tools} == set(config.allowlist)
         response = asyncio.run(smoke._call_tool(url, 10, 'semantic_memory',
             {'action': 'recall', 'query': 'apples', 'namespaces': ['vol_7']}))
         assert not response.is_error
@@ -142,6 +169,23 @@ def test_semantic_mcp_over_http(semantic_config, monkeypatch):
         assert result['ok'] and result['count'] == 1
         assert result['documents'][0]['path'] == str(note)
         assert result['documents'][0]['snippet'] == note.read_text()
+        for tool, args in [
+            ('procedural_memory', {'action': 'save_context', 'scope': 'account', 'context_name': 'http', 'text': 'HTTP context'}),
+            ('procedural_memory', {'action': 'recall', 'context_name': 'http'}),
+            ('episodic_memory', {'action': 'create_session', 'session_id': 'http-session'}),
+            ('episodic_memory', {'action': 'append_event', 'session_id': 'http-session',
+                'event': {'role': 'user', 'actor': 'acct', 'content': 'HTTP event'}}),
+            ('episodic_memory', {'action': 'get_recent_events', 'session_id': 'http-session'}),
+        ]:
+            response = asyncio.run(smoke._call_tool(url, 10, tool, args))
+            assert not response.is_error
+            payload = json.loads(response.content[0].text)
+            assert payload['ok'], payload
+            if args['action'] == 'recall':
+                assert payload['memory']['text'] == 'HTTP context'
+            if args['action'] == 'get_recent_events':
+                assert payload['events'][0]['content'] == 'HTTP event'
+
     finally:
         if servers:
             servers[0].should_exit = True
@@ -174,3 +218,138 @@ def test_embedding_failure_is_logged_with_mcp_fallback_summary(semantic_config, 
         assert 'apples' not in caplog.text
     finally:
         scope.close()
+
+
+def test_one_shared_runtime_persists_all_memory_components(all_memory_config, monkeypatch):
+    import galet_memory
+    from galet_memory import WorkingRunUnavailable
+
+    config, note, _ = all_memory_config
+    original = galet_memory.build_memory
+    built = []
+    def build(*args, **kwargs):
+        runtime = original(*args, **kwargs)
+        built.append(runtime)
+        return runtime
+    monkeypatch.setattr(galet_memory, 'build_memory', build)
+    scope, _ = resolve_startup_scope(config)
+    runtime = scope.memory_runtime
+    assert built == [runtime]
+    assert scope.handlers['semantic_memory'].memory is runtime.semantic
+    assert scope.handlers['episodic_memory'].memory is runtime.episodic
+    assert scope.handlers['procedural_memory'].memory is runtime.procedural
+    try:
+        memory_call(scope, 'procedural_memory', {'action': 'save_context', 'scope': 'global', 'context_name': 'dev', 'text': 'Global'})
+        memory_call(scope, 'procedural_memory', {'action': 'save_context', 'scope': 'account', 'context_name': 'dev', 'text': 'Account'})
+        assert (note.parent.parent / 'contexts/acct/dev.md').read_text().endswith('Account')
+        assert memory_call(scope, 'procedural_memory', {'action': 'recall', 'context_name': 'dev'})['memory']['text'] == 'Account'
+        memory_call(scope, 'episodic_memory', {'action': 'create_session', 'session_id': 'shared'})
+        memory_call(scope, 'episodic_memory', {'action': 'append_event', 'session_id': 'shared',
+            'event': {'role': 'user', 'actor': 'acct', 'content': 'Persisted event'}})
+        runtime.working.start_run('acct', 'run')
+        runtime.working.put('acct', 'run', 'status', {'ready': True}, expected_version=0)
+        with pytest.raises(WorkingRunUnavailable):
+            runtime.working.get('other', 'run', 'status')
+        for name in config.allowlist:
+            assert dispatch_call(scope, name, {'action': 'recall', 'account_name': 'other'})['isError']
+    finally:
+        scope.close()
+    assert runtime._closed
+    reopened, _ = resolve_startup_scope(config)
+    try:
+        assert memory_call(reopened, 'episodic_memory', {'action': 'get_recent_events', 'session_id': 'shared'})['events'][0]['content'] == 'Persisted event'
+        assert memory_call(reopened, 'procedural_memory', {'action': 'recall', 'context_name': 'dev'})['memory']['text'] == 'Account'
+        assert call(reopened, {'action': 'recall', 'query': 'apples'})['count'] == 1
+        assert reopened.memory_runtime.working.get('acct', 'run', 'status').value == {'ready': True}
+    finally:
+        reopened.close()
+
+
+def test_allowlisted_component_must_exist_in_shared_config(semantic_config):
+    config, _, _ = semantic_config
+    config = replace(config, allowlist=['procedural_memory'])
+    with pytest.raises(GaletMcpError, match='does not enable procedural'):
+        resolve_startup_scope(config)
+
+
+def test_shared_config_rejects_legacy_overrides(semantic_config):
+    config, _, _ = semantic_config
+    with pytest.raises(GaletMcpError, match='cannot be combined'):
+        resolve_startup_scope(replace(config, episodic_memory_db_path='/legacy.sqlite'))
+
+
+def test_failed_handler_binding_closes_shared_runtime(semantic_config, monkeypatch):
+    from galet_tools.host import memory
+    config, _, _ = semantic_config
+    original = memory.build_configured_memory
+    built = []
+    def build(*args, **kwargs):
+        result = original(*args, **kwargs)
+        built.append(result)
+        return result
+    def fail(*args):
+        raise RuntimeError('binding failed')
+    monkeypatch.setattr(memory, 'build_configured_memory', build)
+    monkeypatch.setattr(memory, 'memory_handlers', fail)
+    with pytest.raises(RuntimeError, match='binding failed'):
+        resolve_startup_scope(config)
+    assert built[0]._closed
+
+
+def test_paired_example_configs_build_all_components(tmp_path, monkeypatch):
+    from pathlib import Path
+    import galet_memory.assembly as assembly
+    monkeypatch.setattr(assembly, 'galet_embedding_factory', lambda: Embeddings)
+    root = Path(__file__).resolve().parents[1]
+    raw = json.loads((root / 'galet-memory-mcp.example.json').read_text())
+    raw['external_roots'] = {'memory_test': str(tmp_path), 'obsidian': str(tmp_path)}
+    (tmp_path / 'digests').mkdir()
+    memory_path = tmp_path / 'memory.json'
+    memory_path.write_text(json.dumps(raw))
+    mcp = json.loads((root / 'galet-mcp.example.json').read_text())
+    mcp['memory_config_path'] = str(memory_path)
+    mcp_path = tmp_path / 'mcp.json'
+    mcp_path.write_text(json.dumps(mcp))
+    scope, _ = resolve_startup_scope(load_config(mcp_path))
+    try:
+        assert all(getattr(scope.memory_runtime, kind) is not None
+                   for kind in ('semantic', 'episodic', 'procedural', 'working'))
+        assert scope.memory_runtime.config.procedural.layout['account_contexts'] == 'contexts/{account}'
+    finally:
+        scope.close()
+
+
+def test_shared_config_conflict_is_reported_by_loader(semantic_config, tmp_path):
+    config, _, _ = semantic_config
+    path = tmp_path / 'conflict.json'
+    path.write_text(json.dumps({'account': 'acct', 'allowlist': ['episodic_memory'],
+        'memory_config_path': config.memory_config_path,
+        'episodic_memory_db_path': str(tmp_path / 'legacy.sqlite'),
+        'storage_root': str(tmp_path), 'storage_namespace': 'data', 'sandbox_root': str(tmp_path)}))
+    with pytest.raises(GaletConfigError, match='cannot be combined'):
+        load_config(path)
+
+
+def test_nonsemantic_tools_do_not_construct_embedding_provider(all_memory_config, monkeypatch):
+    import galet_memory.assembly as assembly
+    config, _, _ = all_memory_config
+    monkeypatch.setattr(assembly, 'galet_embedding_factory', lambda: pytest.fail('semantic provider must not be built'))
+    scope, definitions = resolve_startup_scope(replace(config, allowlist=['episodic_memory', 'procedural_memory']))
+    try:
+        assert scope.memory_runtime.semantic is None
+        assert scope.memory_runtime.working is not None
+        assert {d['name'] for d in definitions} == {'episodic_memory', 'procedural_memory'}
+    finally:
+        scope.close()
+
+
+def test_all_component_preflight_precedes_database_creation(all_memory_config):
+    config, note, path = all_memory_config
+    raw = json.loads(path.read_text())
+    raw['memory']['working']['database'] = {
+        'external_root': 'data', 'relative_path': 'missing-working.sqlite', 'create': False,
+    }
+    path.write_text(json.dumps(raw))
+    with pytest.raises(GaletMcpError, match='cannot configure memory'):
+        resolve_startup_scope(config)
+    assert not (note.parent.parent / 'episodic.sqlite').exists()

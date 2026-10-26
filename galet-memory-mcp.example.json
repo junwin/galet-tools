@@ -1,0 +1,56 @@
+{
+  "config_version": 1,
+  "external_roots": {
+    "memory_test": "/tmp/galet-memory-mcp",
+    "obsidian": "/home/junwin/obsidian/test"
+  },
+  "embedding_profiles": {
+    "semantic_default": {
+      "provider": "openai",
+      "model": "text-embedding-3-small",
+      "dimensions": 1536
+    }
+  },
+  "memory": {
+    "semantic": {
+      "metadata_version": 3,
+      "embedding_profile": "semantic_default",
+      "database": {
+        "external_root": "memory_test",
+        "relative_path": "semantic.sqlite",
+        "create": true
+      }
+    },
+    "episodic": {
+      "database": {
+        "external_root": "memory_test",
+        "relative_path": "episodic.sqlite",
+        "create": true
+      },
+      "digests_directory": {
+        "external_root": "memory_test",
+        "relative_path": "digests"
+      }
+    },
+    "procedural": {
+      "root": {"external_root": "memory_test", "relative_path": "."},
+      "context_resolution": "most_specific",
+      "layout": {
+        "global_contexts": "contexts",
+        "account_contexts": "contexts/{account}",
+        "project_contexts": null,
+        "global_skills": "skills",
+        "account_skills": "skills/{account}",
+        "project_skills": null
+      }
+    },
+    "working": {
+      "database": {
+        "external_root": "memory_test",
+        "relative_path": "working.sqlite",
+        "create": true
+      },
+      "max_value_bytes": 65536
+    }
+  }
+}

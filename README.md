@@ -309,6 +309,10 @@ tools over streamable HTTP. Install the extra:
 .venv/bin/pip install -e '.[mcp]'
 ```
 
+For memory tools, install `.[memory,mcp]` and follow the
+[shared memory setup](docs/memory-tools.md#mcp-configuration) first. The paired
+`galet-memory-mcp.example.json` config covers all four memory types.
+
 Copy the example config and start the server:
 
 ```bash
@@ -352,11 +356,11 @@ Optional keys left out or set to null fall back to their defaults:
 - `host` — default `127.0.0.1`; loopback only.
 - `port` — default `8765`.
 - `fonts` — font paths for the generators; default none.
-- `memory_config_path` — absolute galet-memory config path, required when
-  `semantic_memory` is allowed. See the [existing V3 database setup](docs/memory-tools.md#semantic-recall-against-an-existing-v3-database).
-- `episodic_memory_db_path` — optional absolute relational SQLite path; defaults
+- `memory_config_path` — absolute galet-memory config path shared by all memory tools.
+  Required for semantic memory; replaces legacy episodic/procedural options. See the [existing V3 database setup](docs/memory-tools.md#semantic-recall-against-an-existing-v3-database).
+- `episodic_memory_db_path` — legacy, only without `memory_config_path`; optional absolute relational SQLite path; defaults
   to `<storage_root>/<storage_namespace>/chat2.sqlite` when episodic tools are allowed.
-- `procedural_memory` — optional root/layout/context-resolution overrides. See
+- `procedural_memory` — legacy, only without `memory_config_path`; optional root/layout/context-resolution overrides. See
   [memory configuration](docs/memory-tools.md#mcp-configuration).
 
 ### What it exposes

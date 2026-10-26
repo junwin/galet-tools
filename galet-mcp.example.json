@@ -8,7 +8,8 @@
     "execute_command2",
     "generate_svg",
     "procedural_memory",
-    "episodic_memory"
+    "episodic_memory",
+    "semantic_memory"
   ],
   "storage_root": "/home/junwin/lucy_storage",
   "storage_namespace": "galet",
@@ -26,10 +27,5 @@
   "fonts": [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
   ],
-  "episodic_memory_db_path": "/home/junwin/lucy_storage/data/episodic-v2.sqlite",
-  "procedural_memory": {
-    "root": "/home/junwin/lucy_storage/data",
-    "context_resolution": "most_specific"
-  }
+  "memory_config_path": "/home/junwin/src/repos/galet-tools/galet-memory-mcp.json"
 }
-
