@@ -24,7 +24,7 @@ classifiers = [
 [project.optional-dependencies]
 mcp = ["mcp==2.1.1"]
 video = ["galet[gemini]>=0.1.26"]
-memory = ["galet-memory[vec]>=0.1.25"]
+memory = ["galet-memory[vec]>=0.1.27"]
 
 [project.scripts]
 galet-tools-mcp = "galet_tools.mcp.server:main"
