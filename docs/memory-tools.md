@@ -69,8 +69,10 @@ database. Existing schemas and embedding profiles are validated; no implicit
 migration runs. Create configured root directories and the digest directory
 before startup.
 
-Allow `semantic_memory`, `episodic_memory`, and `procedural_memory` in MCP's
-allowlist. Each allowed tool must have its component in the memory config.
+Allow `semantic_memory`, `procedural_memory`, and the desired explicit episodic
+operations (for example `episodic_list_sessions` and `episodic_get_recent_events`)
+in MCP's allowlist. The combined `episodic_memory` tool remains available for
+existing clients. Each allowed tool must have its component in the memory config.
 Components belonging to tools outside the allowlist are not opened. Working
 memory, if configured, is internal host state attached to `scope.memory_runtime`;
 it has no MCP tool. Its persistence and account isolation are checked with the
@@ -109,9 +111,9 @@ galet-tools-smoke --url http://127.0.0.1:8700/mcp list
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call semantic_memory '{"action":"recall","query":"Tyntesfield country house","namespaces":["vol_7"]}'
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"save_context","scope":"account","context_name":"mcp-check","text":"Shared configuration test"}'
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"recall","context_name":"mcp-check"}'
-galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"create_session","session_id":"mcp-config-check"}'
-galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"append_event","session_id":"mcp-config-check","event":{"role":"user","actor":"junwin","content":"Shared configuration test"}}'
-galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"get_recent_events","session_id":"mcp-config-check"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_create_session '{"session_id":"mcp-config-check"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_append_event '{"session_id":"mcp-config-check","event":{"role":"user","actor":"junwin","content":"Shared configuration test"}}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_get_recent_events '{"session_id":"mcp-config-check"}'
 ```
 
 Use a fresh session ID for a repeat creation test. Restart the server, repeat
@@ -252,7 +254,7 @@ galet-tools-mcp --config galet-mcp.json
 galet-tools-smoke --url http://127.0.0.1:8700/mcp list
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"list_contexts"}'
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"recall","context_name":"dev"}'
-galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"get_recent_events","session_id":"<session-id>","count":10,"event_kinds":["user_message"]}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_get_recent_events '{"session_id":"<session-id>","count":10,"event_kinds":["user_message"]}'
 galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"invalidate_exchange","session_id":"<session-id>","correlation_id":"<correlation-id>"}'
 ```
 
@@ -354,3 +356,49 @@ Install galet-memory's embedding-failure logging change too: it logs the origina
 exception and traceback when query embedding fails, before attempting keyword
 fallback. This makes missing credentials, provider outages and other embedding
 errors visible in the MCP process. A vector recall reports `backend=vector`.
+
+## Simple episodic client tools and session diagnostics
+
+The combined `episodic_memory` form contains fields for every operation. For a
+small client form, allow individual tools whose names match galet-memory methods:
+
+```json
+"allowlist": [
+  "semantic_memory",
+  "procedural_memory",
+  "episodic_list_sessions",
+  "episodic_get_session",
+  "episodic_get_recent_events"
+]
+```
+
+Each episodic backend action has an `episodic_<action>` tool, including writes
+and exchange invalidation, enabled individually by the allowlist. The same
+handlers are registered for application hosts such as Lucy. An explicit tool
+has no action selector or editable account field; the host supplies the account.
+`episodic_list_sessions` has only `count` (default 20) and `cursor`.
+`episodic_get_recent_events` requires `session_id`, with optional count (default
+10), filters and pagination. Optional blank pagination fields mean no cursor.
+
+```bash
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_list_sessions '{}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_get_recent_events '{"session_id":"<session-id>"}'
+```
+
+The existing combined tool accepts the minimal list request
+`{"action":"list_sessions","count":20}` when it is allowlisted. `count:0`
+intentionally returns no sessions, and is now identified as `reason:count_zero`.
+Session-list results include the execution account, requested count and SQLite
+path. Server startup logs `mcp_episodic_ready` with account, database path and
+`has_sessions`, without logging session contents.
+
+For sessions visible in Lucy but absent in MCP, compare the exact database file
+and account. Lucy defaults to `episodic-v2.sqlite` unless its local
+`episodic_memory_db_path` overrides it. A sample pointing at `episodic-v3.sqlite`
+is not evidence that this is Lucy's active database. The episodic filename is
+unrelated to semantic metadata version 3: do not migrate or rename episodic
+storage to make its filename match semantic storage. Configure MCP's
+`memory.episodic.database` to the exact existing Lucy database with `create:false`.
+Do not point a live test's write tools at application storage unless you intend
+to change it; pre-existing-session listing and event reading can be tested with
+only the three read tools shown above.

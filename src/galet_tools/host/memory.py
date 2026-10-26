@@ -6,7 +6,9 @@ The host owns the returned runtime and closes it once on shutdown.
 from dataclasses import replace
 import logging
 
-MEMORY_TOOLS = frozenset({'semantic_memory', 'episodic_memory', 'procedural_memory'})
+from galet_tools.tools.episodic_operations import EPISODIC_OPERATION_HANDLERS, EPISODIC_OPERATION_NAMES
+
+MEMORY_TOOLS = frozenset({'semantic_memory', 'episodic_memory', 'procedural_memory'}) | EPISODIC_OPERATION_NAMES
 logger = logging.getLogger(__name__)
 
 
@@ -14,6 +16,8 @@ def build_configured_memory(path, tool_names, *, embedding_provider_factory=None
     from galet_memory import build_memory, load_memory_config
 
     selected = set(tool_names) & MEMORY_TOOLS
+    if selected & EPISODIC_OPERATION_NAMES:
+        selected = (selected - EPISODIC_OPERATION_NAMES) | {'episodic_memory'}
     settings = load_memory_config(path=path)
     for tool in sorted(selected):
         kind = tool.removesuffix('_memory')
@@ -45,11 +49,14 @@ def memory_handlers(runtime, tool_names):
     selected = set(tool_names) & MEMORY_TOOLS
     handlers = {}
     for tool in sorted(selected):
-        kind = tool.removesuffix('_memory')
+        kind = 'episodic' if tool in EPISODIC_OPERATION_NAMES else tool.removesuffix('_memory')
         backend = getattr(runtime, kind)
         if backend is None:
             raise ValueError(f'{tool} requires an enabled {kind} backend')
-        if tool == 'semantic_memory':
+        if tool in EPISODIC_OPERATION_NAMES:
+            cls = next(cls for cls in EPISODIC_OPERATION_HANDLERS if cls.NAME == tool)
+            handler = cls(backend)
+        elif tool == 'semantic_memory':
             profile = runtime.config.embedding_profiles[runtime.config.semantic.embedding_profile]
             handler = SemanticMemoryHandler(backend, embedding_model=profile.model)
         else:

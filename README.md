@@ -363,6 +363,14 @@ Optional keys left out or set to null fall back to their defaults:
 - `procedural_memory` — legacy, only without `memory_config_path`; optional root/layout/context-resolution overrides. See
   [memory configuration](docs/memory-tools.md#mcp-configuration).
 
+### Episodic client forms
+
+Use `episodic_list_sessions`, `episodic_get_session` and
+`episodic_get_recent_events` in the allowlist for small operation-specific forms.
+The account comes from MCP configuration. The combined `episodic_memory` tool is
+still supported. See [session diagnostics](docs/memory-tools.md#simple-episodic-client-tools-and-session-diagnostics)
+for checking counts, database paths and sessions shared with Lucy.
+
 ### What it exposes
 
 `tools/list` and `tools/call` over streamable HTTP. With the default port, the

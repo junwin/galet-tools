@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from galet_tools.tools.episodic_operations import EPISODIC_OPERATION_NAMES
 from galet_tools.framework.handler_registry import HandlerRegistry
 from galet_tools.register_generic_defaults import register_generic_defaults
 from galet_tools.tools.command_execution_handler2 import CommandExecutionHandler2
@@ -23,6 +24,7 @@ EXPECTED_NAMES = [
     "repo_index",
     "repo_search",
     "video_generate",
+    *sorted(EPISODIC_OPERATION_NAMES),
 ]
 
 PROPERTY_KEYS = {

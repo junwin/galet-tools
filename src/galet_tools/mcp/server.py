@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from galet_tools.tools.episodic_operations import EPISODIC_OPERATION_HANDLERS, EPISODIC_OPERATION_NAMES
 from galet_tools.framework.handler_registry import HandlerRegistry
 from galet_tools.host.adapters import (
     ConfigSandboxRootResolver,
@@ -55,7 +56,8 @@ class McpScope:
         if self.memory_runtime is not None:
             self.memory_runtime.close()
             return
-        handler = self.handlers.get("episodic_memory")
+        handler = next((handler for name, handler in self.handlers.items()
+                        if name == "episodic_memory" or name in EPISODIC_OPERATION_NAMES), None)
         if handler is not None:
             handler.memory.close()
 
@@ -86,6 +88,8 @@ def _build_handlers(config: GaletConfig, memory_runtime=None) -> Dict[str, Any]:
         handlers.update(memory_handlers(memory_runtime, config.allowlist))
         return handlers
     memory_tools = set(config.allowlist) & {"procedural_memory", "episodic_memory"}
+    if set(config.allowlist) & EPISODIC_OPERATION_NAMES:
+        memory_tools.add('episodic_memory')
     if memory_tools:
         logger.warning("legacy_memory_config: use memory_config_path for shared memory configuration")
         try:
@@ -116,6 +120,10 @@ def _build_handlers(config: GaletConfig, memory_runtime=None) -> Dict[str, Any]:
             handlers["episodic_memory"] = EpisodicMemoryHandler(SqliteEpisodicMemory(
                 path, digests_root=base / "digests",
             ))
+            for cls in EPISODIC_OPERATION_HANDLERS:
+                if cls.NAME in config.allowlist:
+                    handlers[cls.NAME] = cls(handlers['episodic_memory'].memory)
+
     return handlers
 
 
@@ -161,6 +169,16 @@ def resolve_startup_scope(config: GaletConfig) -> Tuple[McpScope, List[Dict[str,
         if runtime is not None:
             runtime.close()
         raise
+    episodic = (runtime.episodic if runtime is not None else
+                getattr(scope.handlers.get('episodic_memory'), 'memory', None))
+    if episodic is not None:
+        try:
+            probe = episodic.list_sessions(account_name=config.account, count=1)
+            logger.info("mcp_episodic_ready account=%s database=%s has_sessions=%s",
+                        config.account, getattr(episodic, 'db_path', '<injected>'), bool(probe.items))
+        except BaseException:
+            scope.close()
+            raise
     return scope, mcp_tools
 
 
@@ -176,7 +194,7 @@ def dispatch_call(
         return error_result(
             f"Tool '{name}' is advertised but not available in this server process."
         )
-    if name in ("procedural_memory", "episodic_memory", "semantic_memory"):
+    if name in ("procedural_memory", "episodic_memory", "semantic_memory") or name in EPISODIC_OPERATION_NAMES:
         requested_account = (arguments or {}).get("account_name")
         if requested_account and str(requested_account).strip() != scope.config.account:
             return error_result("account_name does not match the fixed MCP account")

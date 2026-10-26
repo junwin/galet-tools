@@ -133,6 +133,7 @@ def test_semantic_mcp_over_http(all_memory_config, monkeypatch):
     from galet_tools.mcp import server, smoke
 
     config, note, _ = all_memory_config
+    config = replace(config, allowlist=[*config.allowlist, 'episodic_list_sessions', 'episodic_get_recent_events'])
     monkeypatch.setattr(server, 'load_config', lambda path: config)
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
@@ -169,6 +170,9 @@ def test_semantic_mcp_over_http(all_memory_config, monkeypatch):
         assert result['ok'] and result['count'] == 1
         assert result['documents'][0]['path'] == str(note)
         assert result['documents'][0]['snippet'] == note.read_text()
+        listing = asyncio.run(smoke._call_tool(url, 10, 'episodic_list_sessions', {}))
+        assert not listing.is_error and json.loads(listing.content[0].text)['ok']
+
         for tool, args in [
             ('procedural_memory', {'action': 'save_context', 'scope': 'account', 'context_name': 'http', 'text': 'HTTP context'}),
             ('procedural_memory', {'action': 'recall', 'context_name': 'http'}),
@@ -185,6 +189,11 @@ def test_semantic_mcp_over_http(all_memory_config, monkeypatch):
                 assert payload['memory']['text'] == 'HTTP context'
             if args['action'] == 'get_recent_events':
                 assert payload['events'][0]['content'] == 'HTTP event'
+        listing = asyncio.run(smoke._call_tool(url, 10, 'episodic_list_sessions', {}))
+        assert json.loads(listing.content[0].text)['sessions'][0]['session_id'] == 'http-session'
+        recent = asyncio.run(smoke._call_tool(url, 10, 'episodic_get_recent_events', {'session_id': 'http-session'}))
+        assert json.loads(recent.content[0].text)['events'][0]['content'] == 'HTTP event'
+
 
     finally:
         if servers:
