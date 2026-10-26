@@ -219,9 +219,9 @@ The `episodic_memory` handler takes an injected episodic store, and
 `curate_chat` takes an injected curation service, and `reset_session` takes
 the same curation service. `semantic_memory` takes an injected
 `galet_memory.semantic.SemanticMemory`. `procedural_memory` exposes context/skill
-recall and scoped context/skill edits. The episodic and procedural tools are
+recall and scoped context/skill edits. The episodic, procedural and semantic tools are
 registered in the generic registry, with backends supplied by the host; MCP
-constructs them when explicitly allowlisted. Curation/reset/semantic tools still
+constructs them when explicitly allowlisted. Curation/reset tools still
 require application services and are not exposed by the generic MCP server.
 
 See [memory tools](docs/memory-tools.md) for procedural operations, correlation
@@ -319,6 +319,22 @@ galet-tools-mcp
 `galet-tools-mcp` reads `galet-mcp.json` from the current directory by
 default; point it elsewhere with `--config <path>`.
 
+### Logging
+
+The server writes timestamped application logs to stderr. To also append them
+to a file:
+
+```bash
+galet-tools-mcp --config galet-mcp.json --log-level INFO --log-file /tmp/galet-mcp.log
+```
+
+Logs include semantic startup profile/version, tool call IDs, timings, outcomes,
+and recall backend/reason/count. Keyword fallback is a warning; a galet-memory
+checkout containing the fallback logging change also reports the
+underlying embedding exception and traceback. Queries and document bodies are
+not included in the server's call summaries. `--log-level` accepts DEBUG, INFO,
+WARNING or ERROR. DEBUG can include verbose third-party SDK diagnostics.
+
 ### Configuration
 
 `galet-mcp.json` mirrors `galet-mcp.example.json`. Required keys are
@@ -336,6 +352,8 @@ Optional keys left out or set to null fall back to their defaults:
 - `host` — default `127.0.0.1`; loopback only.
 - `port` — default `8765`.
 - `fonts` — font paths for the generators; default none.
+- `memory_config_path` — absolute galet-memory config path, required when
+  `semantic_memory` is allowed. See the [existing V3 database setup](docs/memory-tools.md#semantic-recall-against-an-existing-v3-database).
 - `episodic_memory_db_path` — optional absolute relational SQLite path; defaults
   to `<storage_root>/<storage_namespace>/chat2.sqlite` when episodic tools are allowed.
 - `procedural_memory` — optional root/layout/context-resolution overrides. See

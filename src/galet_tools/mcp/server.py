@@ -5,6 +5,8 @@ import asyncio
 import json
 import logging
 import sys
+import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -164,18 +166,31 @@ def dispatch_call(
         requested_account = (arguments or {}).get("account_name")
         if requested_account and str(requested_account).strip() != scope.config.account:
             return error_result("account_name does not match the fixed MCP account")
+    call_id = uuid.uuid4().hex
+    started = time.monotonic()
+    logger.info("mcp_call_start call_id=%s tool=%s account=%s",
+                call_id, name, scope.config.account)
     try:
         result = handler.execute(
             arguments or {}, account_name=scope.config.account
         )
     except Exception as exc:
-        logger.exception("mcp_call_failed tool=%s", name)
+        logger.exception("mcp_call_failed call_id=%s tool=%s duration_ms=%.1f",
+                         call_id, name, (time.monotonic() - started) * 1000)
         return error_result(f"{type(exc).__name__}: {exc}")
     if not isinstance(result, dict):
         return error_result(
             f"Tool '{name}' produced a {type(result).__name__} result; "
             "expected a structured dict."
         )
+    metadata = result.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    backend, reason = metadata.get("backend"), metadata.get("reason")
+    log = logger.warning if result.get("ok") is False or backend == "keyword" else logger.info
+    log("mcp_call_done call_id=%s tool=%s account=%s duration_ms=%.1f "
+        "ok=%s backend=%s reason=%s count=%s",
+        call_id, name, scope.config.account, (time.monotonic() - started) * 1000,
+        result.get("ok"), backend, reason, result.get("count"))
     try:
         text = json.dumps(result, ensure_ascii=False, default=str)
     except Exception:
@@ -261,10 +276,6 @@ def serve(config_path: Optional[str] = None) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
     parser = argparse.ArgumentParser(
         prog="galet-mcp",
         description="galet-tools MCP streamable-HTTP server (loopback only).",
@@ -274,10 +285,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="path to the galet-mcp.json config file (default: ./galet-mcp.json)",
     )
+    parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+                        default="INFO", help="application log level (default: INFO)")
+    parser.add_argument("--log-file", help="append application logs to this file as well as stderr")
     args = parser.parse_args(argv)
+    try:
+        handlers = [logging.StreamHandler()]
+        if args.log_file:
+            handlers.append(logging.FileHandler(args.log_file, encoding="utf-8"))
+    except OSError as exc:
+        print(f"galet-mcp: cannot open log file: {exc}", file=sys.stderr)
+        return 2
+    logging.basicConfig(
+        level=getattr(logging, args.log_level), handlers=handlers,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger.info("mcp_process_start config=%s", args.config or "galet-mcp.json")
     try:
         serve(config_path=args.config)
     except (GaletConfigError, GaletMcpError) as exc:
+        logger.error("mcp_start_failed: %s", exc)
         print(f"galet-mcp: {exc}", file=sys.stderr)
         return 2
     return 0
