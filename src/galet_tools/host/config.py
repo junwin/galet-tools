@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+from galet_tools.tools.episodic_operations import EPISODIC_OPERATION_NAMES
+
 DEFAULT_CONFIG_FILE = "galet-mcp.json"
 
 DEFAULT_HOST = "127.0.0.1"
@@ -28,6 +30,7 @@ DEFAULT_ALLOWLIST = list(REGISTERED_TOOL_NAMES)
 # Provider-backed media tools are available when explicitly allowed.
 REGISTERED_TOOL_NAMES += ("image_generate", "video_generate")
 REGISTERED_TOOL_NAMES += ("procedural_memory", "episodic_memory", "semantic_memory")
+REGISTERED_TOOL_NAMES += tuple(sorted(EPISODIC_OPERATION_NAMES))
 
 
 class GaletConfigError(Exception):

@@ -65,7 +65,8 @@ class EpisodicMemoryHandler(HandlerV2):
                     "action": {"type": "string", "enum": list(cls.ACTIONS)},
                     "account_name": {"type": "string", "description": "Defaults to the trusted execution account."},
                     "session_id": {"type": "string"}, "session_ids": strings,
-                    "count": {"type": "integer", "minimum": 0},
+                    "count": {"type": "integer", "minimum": 0, "default": 20,
+                              "description": "Maximum records; zero returns none. Omit for the operation default."},
                     "cursor": {"type": "string"}, "before_event_id": {"type": "string"},
                     "event_id": {"type": "string"}, "digest_id": {"type": "string"},
                     "correlation_id": {"type": "string"}, "query": {"type": "string"},
@@ -193,7 +194,7 @@ class EpisodicMemoryHandler(HandlerV2):
                 kw["session_id"] = self._optional_text(args.get("session_id"), "session_id")
 
             result = getattr(memory, action)(**kw)
-            output = {"ok": True, "tool": self.NAME, "action": action}
+            output = {"ok": True, "tool": self.NAME, "action": action, "account_name": resolved}
             if action in ("create_session", "get_session", "update_session"):
                 if result is None:
                     raise ValueError("Session not found for account")
@@ -201,6 +202,14 @@ class EpisodicMemoryHandler(HandlerV2):
             elif action in ("list_sessions", "list_digests"):
                 key = "sessions" if action == "list_sessions" else "digests"
                 output.update({key: self._serialize(result.items), "count": len(result.items), "next_cursor": result.next_cursor})
+                if action == "list_sessions":
+                    output["metadata"] = {"requested_count": kw["count"]}
+                    path = getattr(memory, "db_path", None)
+                    if path is not None:
+                        output["metadata"]["database_path"] = str(path)
+                    if kw["count"] == 0:
+                        output["metadata"]["reason"] = "count_zero"
+
             elif action in ("get_recent_events", "get_events_by_period"):
                 output.update(self._serialize(result))
                 output["event_count"] = len(result.events)
@@ -235,7 +244,7 @@ class EpisodicMemoryHandler(HandlerV2):
 
     @classmethod
     def _optional_text(cls, value, name):
-        return None if value is None else cls._text(value, name)
+        return None if value is None or (isinstance(value, str) and not value.strip()) else cls._text(value, name)
 
     @classmethod
     def _strings(cls, value, name):
