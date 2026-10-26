@@ -6,9 +6,16 @@ Install the optional memory backend and MCP SDK from a galet-tools checkout:
 python -m pip install -U -e '.[memory,mcp]'
 ```
 
-For semantic V3 support, install the current galet-memory checkout in the same
-virtual environment (the V3 configuration API is newer than the original 0.1.25
-release):
+The shared configuration and procedural layout require galet-memory 0.1.28 or
+newer. Upgrade it in the same virtual environment that runs MCP and pytest:
+
+```bash
+.venv/bin/python -m pip install --upgrade 'galet-memory[vec]>=0.1.28'
+.venv/bin/python -m pytest
+```
+
+For development against a galet-memory checkout, install that checkout into the
+same environment:
 
 ```bash
 python -m pip install -e '../galet-memory[vec]'
