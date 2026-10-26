@@ -21,53 +21,119 @@ them from its configuration. Base-package registration does not import
 
 ## MCP configuration
 
-Add `procedural_memory` and `episodic_memory` to `allowlist`. The default
-allowlist remains the existing filesystem/command/SVG set. These optional
-settings select a **fresh schema-v2 database** for integration testing:
+Use one `memory_config_path` for semantic, episodic, procedural and working
+memory. Galet-memory loads and validates its own config and constructs one
+`MemoryRuntime`; MCP injects its backends into the allowlisted tools and closes
+the runtime once on shutdown. Galet owns credential lookup, including
+`GALET_CREDENTIAL_PATH`. MCP retains the account, tool allowlist and HTTP options.
+
+Start with the paired examples:
+
+```bash
+python -m pip install -e '../galet-memory[vec]'
+python -m pip install -e '.[memory,mcp]'
+mkdir -p /tmp/galet-memory-mcp/digests
+cp galet-memory-mcp.example.json galet-memory-mcp.json
+cp galet-mcp.example.json galet-mcp.json
+```
+
+Set MCP's `memory_config_path` to the absolute path of `galet-memory-mcp.json`.
+Review the example roots for your machine. The memory example creates NEW empty
+test stores under `/tmp/galet-memory-mcp`; it does not copy existing application
+data. To recall your verified migration, add this root to the memory config:
+
+```json
+"migration": "/tmp/memory-v3-migration-PdLyn1"
+```
+
+and replace only `memory.semantic.database` with:
 
 ```json
 {
-  "account": "junwin",
-  "allowlist": ["procedural_memory", "episodic_memory"],
-  "storage_root": "/home/junwin/lucy_storage",
-  "storage_namespace": "data",
-  "sandbox_root": "/home/junwin/sandbox",
-  "episodic_memory_db_path": "/home/junwin/lucy_storage/data/episodic-v2.sqlite",
-  "procedural_memory": {
-    "root": "/home/junwin/lucy_storage/data",
-    "context_resolution": "most_specific"
-  },
-  "host": "127.0.0.1",
-  "port": 8700
+  "external_root": "migration",
+  "relative_path": "migrated-v3-verified.sqlite",
+  "create": false
 }
 ```
 
-Without overrides, episodic storage is `<storage_root>/<storage_namespace>/chat2.sqlite`
-and procedural storage uses the same base directory. The database path and
-procedural root must be absolute. The configured MCP account is fixed for the
-server; tool arguments cannot switch it, and episodic operations check session
-ownership. Tools use galet-memory's current relational SQLite implementation.
+Keep the episodic, procedural and working roots in the disposable workspace for
+initial write tests. Use `create:false` when deliberately opening an existing
+database. Existing schemas and embedding profiles are validated; no implicit
+migration runs. Create configured root directories and the digest directory
+before startup.
 
-The default procedural layout matches Lucy's global/account layout:
+Allow `semantic_memory`, `episodic_memory`, and `procedural_memory` in MCP's
+allowlist. Each allowed tool must have its component in the memory config.
+Components belonging to tools outside the allowlist are not opened. Working
+memory, if configured, is internal host state attached to `scope.memory_runtime`;
+it has no MCP tool. Its persistence and account isolation are checked with the
+same runtime in the integration tests.
+
+The sample explicitly preserves the established procedural paths:
 
 | Scope | Contexts | Skills |
 | --- | --- | --- |
 | Global | `contexts/<name>.md` | `skills/<name>.md` |
 | Account | `contexts/<account>/<name>.md` | `skills/<account>/<name>.md` |
 
-Project paths are disabled by default. Override any of the six `ProceduralLayout`
-fields in `procedural_memory.layout` to use a different layout, e.g.:
+Project paths are disabled by null layout entries. Set all relevant layout
+fields explicitly when adopting existing files: galet-memory's defaults use
+`procedural/global/...` and `procedural/accounts/...` instead. The selected
+`context_resolution` applies to context merging/precedence; skills resolve to
+the most specific visible scope.
 
-```json
-{
-  "project_contexts": "contexts/{account}/projects/{project}",
-  "project_skills": "skills/{account}/projects/{project}"
-}
+Without `memory_config_path`, the older episodic/procedural MCP options still
+work and log a deprecation warning. They cannot be combined with the shared
+config: move `episodic_memory_db_path` into `memory.episodic.database` and move
+MCP's `procedural_memory` settings into `memory.procedural` (root expressed as
+external root plus relative path). There is no silent precedence or merging.
+
+### Testing all configured memory types
+
+Start the server with the config reviewed above, then use a second terminal:
+
+```bash
+export GALET_CREDENTIAL_PATH=/home/junwin/credential
+galet-tools-mcp --config galet-mcp.json --log-file /tmp/galet-mcp.log
 ```
 
-`context_resolution` accepts `most_specific` (default, account context overrides
-global) or `merge` (combine configured context scopes). Skill resolution always
-chooses the most specific matching skill, as implemented by galet-memory.
+```bash
+galet-tools-smoke --url http://127.0.0.1:8700/mcp list
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call semantic_memory '{"action":"recall","query":"Tyntesfield country house","namespaces":["vol_7"]}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"save_context","scope":"account","context_name":"mcp-check","text":"Shared configuration test"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call procedural_memory '{"action":"recall","context_name":"mcp-check"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"create_session","session_id":"mcp-config-check"}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"append_event","session_id":"mcp-config-check","event":{"role":"user","actor":"junwin","content":"Shared configuration test"}}'
+galet-tools-smoke --url http://127.0.0.1:8700/mcp call episodic_memory '{"action":"get_recent_events","session_id":"mcp-config-check"}'
+```
+
+Use a fresh session ID for a repeat creation test. Restart the server, repeat
+the procedural recall and episodic read, and confirm the content persists.
+Semantic recall must report `backend:vector` for a vector test. Working memory's
+host-level lifecycle/persistence test is in `tests/test_semantic_mcp.py`.
+
+### Applying the same assembly in Lucy
+
+The reusable functions live in `galet_tools.host.memory`, outside the MCP server:
+
+```python
+from galet_tools.host.memory import build_configured_memory, memory_handlers
+
+tools = ['semantic_memory', 'episodic_memory', 'procedural_memory']
+runtime = build_configured_memory(memory_config_path, tools)
+handlers = memory_handlers(runtime, tools)
+# Inject runtime.semantic, runtime.episodic, runtime.procedural and runtime.working
+# into the application's services. Close runtime once at application shutdown.
+```
+
+An application can also call `galet_memory.load_memory_config` and `build_memory`
+directly to build every configured component. Both routes use the same config
+contract. Lucy currently constructs its semantic, episodic and procedural
+services separately in `src/container_config.py`; adoption needs a singleton
+runtime, injection into tool and prompt-building consumers, and shutdown cleanup.
+Its semantic wrapper and digest search/publication adapters need separate review:
+MCP recall success does not validate Lucy's curation integration. This change
+does not alter Lucy or switch its databases.
 
 ## Procedural tool
 
@@ -191,9 +257,8 @@ handler result with `ok:false` is a normal tool result containing the failure.
 
 Add `semantic_memory` to the MCP allowlist and set `memory_config_path` to an
 absolute path to a galet-memory config. Its semantic section selects the database,
-metadata version, embedding profile and authorized source roots. MCP uses only
-that semantic component; other components in the shared memory config are not
-opened. Existing procedural and episodic MCP options still configure those tools.
+metadata version, embedding profile and authorized source roots. MCP opens the semantic component and any other allowlisted memory components.
+For the semantic-only allowlist below, episodic and procedural stores are not opened.
 The configured MCP account applies to recall and namespace listing.
 
 To test a migrated database, create separate test configs. For example, with the

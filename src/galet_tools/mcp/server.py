@@ -49,11 +49,12 @@ class McpScope:
     config: GaletConfig
     handlers: Dict[str, Any]
     tool_names: frozenset
+    memory_runtime: Any = None
 
     def close(self) -> None:
-        semantic = self.handlers.get("semantic_memory")
-        if semantic is not None:
-            semantic.close()
+        if self.memory_runtime is not None:
+            self.memory_runtime.close()
+            return
         handler = self.handlers.get("episodic_memory")
         if handler is not None:
             handler.memory.close()
@@ -65,7 +66,7 @@ def build_registry() -> HandlerRegistry:
     return registry
 
 
-def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
+def _build_handlers(config: GaletConfig, memory_runtime=None) -> Dict[str, Any]:
     storage = ConfigStorageLocationResolver(config)
     sandbox = ConfigSandboxRootResolver(config)
     security = DefaultSecurityPolicy()
@@ -80,8 +81,13 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
         "image_generate": ImageGenerateHandler(storage),
         "video_generate": VideoGenerateHandler(storage),
     }
+    if memory_runtime is not None:
+        from galet_tools.host.memory import memory_handlers
+        handlers.update(memory_handlers(memory_runtime, config.allowlist))
+        return handlers
     memory_tools = set(config.allowlist) & {"procedural_memory", "episodic_memory"}
     if memory_tools:
+        logger.warning("legacy_memory_config: use memory_config_path for shared memory configuration")
         try:
             from galet_memory import FileProceduralMemory, ProceduralLayout, SqliteEpisodicMemory
         except ImportError as exc:
@@ -110,14 +116,6 @@ def _build_handlers(config: GaletConfig) -> Dict[str, Any]:
             handlers["episodic_memory"] = EpisodicMemoryHandler(SqliteEpisodicMemory(
                 path, digests_root=base / "digests",
             ))
-    if "semantic_memory" in config.allowlist:
-        from galet_tools.mcp.semantic import build_semantic_handler
-        try:
-            handlers["semantic_memory"] = build_semantic_handler(config.memory_config_path)
-        except Exception as exc:
-            if "episodic_memory" in handlers:
-                handlers["episodic_memory"].memory.close()
-            raise GaletMcpError(f"cannot configure semantic memory: {exc}") from exc
     return handlers
 
 
@@ -142,11 +140,27 @@ def resolve_startup_scope(config: GaletConfig) -> Tuple[McpScope, List[Dict[str,
             f"from the registered handlers {registry.tool_names()!r} "
             "(nothing exposed => nothing to serve)"
         )
-    scope = McpScope(
-        config=config,
-        handlers=_build_handlers(config),
-        tool_names=frozenset(tool["name"] for tool in mcp_tools),
-    )
+    from galet_tools.host.memory import MEMORY_TOOLS, build_configured_memory
+    runtime = None
+    if config.memory_config_path and set(config.allowlist) & MEMORY_TOOLS:
+        if config.episodic_memory_db_path is not None or config.procedural_memory:
+            raise GaletMcpError("memory_config_path cannot be combined with legacy episodic_memory_db_path or procedural_memory; move them into the shared memory config")
+        try:
+            runtime = build_configured_memory(config.memory_config_path, config.allowlist)
+        except Exception as exc:
+            raise GaletMcpError(f"cannot configure memory: {exc}") from exc
+    elif "semantic_memory" in config.allowlist:
+        raise GaletMcpError("semantic_memory requires memory_config_path")
+    try:
+        scope = McpScope(
+            config=config, handlers=_build_handlers(config, runtime),
+            tool_names=frozenset(tool["name"] for tool in mcp_tools),
+            memory_runtime=runtime,
+        )
+    except BaseException:
+        if runtime is not None:
+            runtime.close()
+        raise
     return scope, mcp_tools
 
 

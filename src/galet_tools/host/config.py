@@ -192,6 +192,9 @@ def _validate(raw: Dict[str, Any], *, source: str) -> GaletConfig:
     if any(value is not None and not isinstance(value, str) for value in layout.values()):
         fail("procedural_memory.layout paths must be strings or null")
 
+    if memory_config_path and (episodic_path is not None or procedural):
+        fail("memory_config_path cannot be combined with legacy episodic_memory_db_path or procedural_memory; move them into the shared memory config")
+
     return GaletConfig(
         account=account,
         allowlist=allowlist,
