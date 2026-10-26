@@ -23,7 +23,7 @@ git clone --branch develop https://github.com/junwin/galet-tools.git
 cd galet-tools
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[memory,mcp,video]" pytest
+python -m pip install -e ".[memory,mcp,video]" 
 python -m pytest -q
 ```
 
