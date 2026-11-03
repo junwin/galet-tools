@@ -81,3 +81,6 @@ EPISODIC_OPERATION_HANDLERS = tuple(
     for action in _OPERATIONS
 )
 EPISODIC_OPERATION_NAMES = frozenset(cls.NAME for cls in EPISODIC_OPERATION_HANDLERS)
+
+# Stable module attributes let lazy registrars (and pickle) resolve these classes.
+globals().update({cls.__name__: cls for cls in EPISODIC_OPERATION_HANDLERS})
