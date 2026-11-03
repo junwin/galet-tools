@@ -1,3 +1,9 @@
+from .composition import (
+    HandlerServices,
+    MissingHandlerServiceError,
+    RegistrationReport,
+    register_builtin_handlers,
+)
 from .discovery import (
     ENTRY_POINT_GROUP,
     HandlerPluginError,
@@ -13,6 +19,10 @@ from .framework import (
 )
 
 __all__ = [
+    "HandlerServices",
+    "MissingHandlerServiceError",
+    "RegistrationReport",
+    "register_builtin_handlers",
     "ENTRY_POINT_GROUP",
     "ErrorCode",
     "HandlerPluginError",

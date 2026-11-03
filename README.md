@@ -452,3 +452,13 @@ unchanged context lines. Failed context-free interior hunks report
 Valid full-file patches that Git accepts still work. Neither check nor apply
 uses `--unidiff-zero`. Reread a narrow affected region after a mismatch instead
 of repeatedly guessing line numbers/counts. These tools do not commit changes.
+
+## Application-host composition
+
+Hosts can compose the supported built-ins through
+`galet_tools.register_builtin_handlers`, preserving their own adapters and
+factories while supplying storage, command and memory services through
+`HandlerServices`. Newly added package handlers become discoverable without
+individual host registrations. Registration does not grant tool permissions.
+See [the composition contract](docs/handler-composition.md) for precedence,
+execution context, optional dependencies and migration from explicit imports.
